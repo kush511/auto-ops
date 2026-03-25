@@ -1,11 +1,19 @@
-version: '3.9'
+version: "3.9"
 
 services:
-  app: 
+  app:
     build: ./app
     ports:
       - "3000:3000"
     volumes:
       - ./app/logs:/app/logs
+
+  agent:
+    build: ./agent
     environment:
-      - PORT=3000
+    - LOG_PATH=/agent/logs/app.log
+    - INCEPTION_API_KEY=${INCEPTION_API_KEY}
+    volumes:
+      - ./app/logs:/agent/logs
+    depends_on:
+      - app
