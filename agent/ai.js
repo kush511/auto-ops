@@ -25,6 +25,9 @@ Logs:
 ${logs}
 `;
 
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 6000);
+
   const response = await fetch('https://api.inceptionlabs.ai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -35,11 +38,19 @@ ${logs}
       model: 'mercury-2',
       messages: [{ role: 'user', content: prompt }],
       reasoning_effort: 'instant'
-    })
+    }),
+    signal: controller.signal
   });
 
   const data = await response.json();
-  return data.choices[0].message.content;
+  const content = data.choices[0].message.content;
+
+  try {
+    return JSON.parse(content);
+  } catch (err) {
+    console.log("⚠️ AI returned invalid JSON:", content);
+    return null;
+  }
 }
 
 module.exports = analyzeLogs;

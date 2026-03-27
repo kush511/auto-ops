@@ -15,5 +15,6 @@ services:
     - INCEPTION_API_KEY=${INCEPTION_API_KEY}
     volumes:
       - ./app/logs:/agent/logs
+      -  /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - app
