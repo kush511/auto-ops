@@ -43,6 +43,17 @@ ${logs}
   });
 
   const data = await response.json();
+
+  if (!response.ok) {
+    console.error("❌ AI API error:", data.error || data);
+    return null;
+  }
+
+  if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+    console.error("❌ AI response missing choices array:", data);
+    return null;
+  }
+
   const content = data.choices[0].message.content;
 
   try {

@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent
+  template:
+    metadata:
+      labels:
+        app: agent
+    spec:
+      serviceAccountName: agent-sa
+      containers:
+        - name: agent
+          image: agent:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: INCEPTION_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: inception-secret  
+                  key: api-key
+            - name: LOG_PATH
+              value: "/agent/logs/app.log"

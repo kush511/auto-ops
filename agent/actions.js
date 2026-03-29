@@ -1,5 +1,3 @@
-const { exec } = require("child_process");
-
 /*
 Restarts the Docker container for the phase-1 application.
 Executes a Docker restart command and logs the result to the console.
@@ -15,21 +13,30 @@ service agent
 first instance
 
 */
-function restartService() {
-  console.log(" Restarting service...");
+const { exec } = require("child_process");
 
+function restartDeployment() {
+  console.log("🔁 Restarting Kubernetes deployment...");
 
-  exec(`docker restart auto-ops-app-1`, (err, stdout, stderr) => {
+  exec("kubectl rollout restart deployment app-deployment", (err, stdout, stderr) => {
     if (err) {
-      console.log(" Restart failed:", err.message);
+      console.log("❌ Restart failed:", err.message);
       return;
     }
-    console.log(" Service restarted");
+    console.log("✅ Deployment restarted");
   });
 }
 
-function scaleService() {
-  console.log(" Scaling service (simulated)");
+function scaleDeployment() {
+  console.log("📈 Scaling deployment to 3 replicas...");
+
+  exec("kubectl scale deployment app-deployment --replicas=3", (err, stdout, stderr) => {
+    if (err) {
+      console.log("❌ Scaling failed:", err.message);
+      return;
+    }
+    console.log("✅ Deployment scaled");
+  });
 }
 
-module.exports = { restartService, scaleService };
+module.exports = { restartDeployment, scaleDeployment };
