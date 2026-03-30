@@ -1,4 +1,4 @@
-const { spawn } = require("child_process");
+const { spawn, exec } = require("child_process");
 const analyzeLogs = require("./ai");
 const decideAction = require("./decision");
 const actions = require("./actions");
@@ -21,6 +21,23 @@ function canAct() {
   return true;
 }
 
+function getCurrentReplicas() {
+  return new Promise((resolve) => {
+    exec(
+      `kubectl get deployment ${DEPLOYMENT} -n ${NAMESPACE} -o jsonpath='{.spec.replicas}'`,
+      (err, stdout) => {
+        if (err) {
+          console.error("❌ Failed to get replica count:", err.message);
+          resolve(1); // Default to 1 if can't fetch
+          return;
+        }
+        const replicas = parseInt(stdout.trim()) || 1;
+        resolve(replicas);
+      }
+    );
+  });
+}
+
 async function processBatch() {
   const batch = logBuffer.splice(0, BATCH_SIZE);
   console.log(`📥 Analysing batch of ${batch.length} lines`);
@@ -31,7 +48,8 @@ async function processBatch() {
 
     if (!aiResult) return;
 
-    const decision = decideAction(aiResult);
+    const currentReplicas = await getCurrentReplicas();
+    const decision = decideAction(aiResult, currentReplicas);
     console.log("📋 Decision:", JSON.stringify(decision));
 
     if (decision.action === "restart_service" && canAct()) {
@@ -40,6 +58,9 @@ async function processBatch() {
     } else if (decision.action === "scale_service" && canAct()) {
       console.log("⚙️  Executing scale");
       await actions.scaleDeployment();
+    } else if (decision.action === "scale_down_service" && canAct()) {
+      console.log("⚙️  Executing scale down");
+      await actions.scaleDownDeployment();
     } else {
       console.log(`ℹ️  Action: ${decision.action} — no kubectl call needed`);
     }

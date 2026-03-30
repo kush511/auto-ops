@@ -16,27 +16,39 @@ first instance
 const { exec } = require("child_process");
 
 function restartDeployment() {
-  console.log("🔁 Restarting Kubernetes deployment...");
+  console.log(" Restarting Kubernetes deployment...");
 
   exec("kubectl rollout restart deployment app-deployment", (err, stdout, stderr) => {
     if (err) {
-      console.log("❌ Restart failed:", err.message);
+      console.log(" Restart failed:", err.message);
       return;
     }
-    console.log("✅ Deployment restarted");
+    console.log("Deployment restarted");
   });
 }
 
 function scaleDeployment() {
-  console.log("📈 Scaling deployment to 3 replicas...");
+  console.log("Scaling deployment to 3 replicas...");
 
   exec("kubectl scale deployment app-deployment --replicas=3", (err, stdout, stderr) => {
     if (err) {
-      console.log("❌ Scaling failed:", err.message);
+      console.log(" Scaling failed:", err.message);
       return;
     }
     console.log("✅ Deployment scaled");
   });
 }
 
-module.exports = { restartDeployment, scaleDeployment };
+function scaleDownDeployment() {
+  console.log("Scaling deployment down to 1 replica...");
+
+  exec("kubectl scale deployment app-deployment --replicas=1", (err, stdout, stderr) => {
+    if (err) {
+      console.log(" Scale down failed:", err.message);
+      return;
+    }
+    console.log("✅ Deployment scaled down");
+  });
+}
+
+module.exports = { restartDeployment, scaleDeployment, scaleDownDeployment };

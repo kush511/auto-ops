@@ -14,19 +14,30 @@ Return a JSON object with:
   "patterns": ["pattern1", "pattern2"]
 }
 
-Severity Guide:
-- high: Service down, critical errors, database connection failures, repeated timeouts
-- medium: Performance degradation, memory spikes, multiple warnings, partial failures
-- low: Single warnings, non-critical exceptions, info-level anomalies
+CRITICAL RULES:
+1. ONLY report patterns that are EXPLICITLY visible in the logs
+2. DO NOT make up or infer latency if you don't see actual delay measurements
+3. DO NOT hallucinate issues - if logs are clean/informational only, severity = "low"
+4. High latency MUST include explicit timing data (e.g., "delay: 2500ms" or "latency detected")
+5. Do NOT infer issues from INFO-level logs alone
 
-Consider error patterns, frequency spikes, and timestamps when evaluating severity.
+Severity Guide:
+- high: Actual errors, crashes, timeouts (with proof in logs), repeated failures, EXPLICIT high latency measurements (>2s)
+- medium: Multiple warnings, some performance issues with evidence, occasional errors
+- low: INFO-level logs, single warnings, no errors or warnings present
+
+LOGS ANALYSIS RULES:
+- Look for ERROR or WARN keywords for actual issues
+- Look for explicit millisecond values (e.g., "delay > 2000", "latency detected") for performance issues
+- INFO-level logs about normal requests = do NOT escalate severity unless they contain error indicators
+- Health checks = normal operation, not a problem unless accompanied by errors
 
 Logs:
 ${logs}
 `;
 
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 6000);
+  setTimeout(() => controller.abort(), 30000);
 
   const response = await fetch('https://api.inceptionlabs.ai/v1/chat/completions', {
     method: 'POST',
@@ -56,8 +67,14 @@ ${logs}
 
   const content = data.choices[0].message.content;
 
+  // Strip markdown code fences if present (handle various whitespace)
+  const cleanContent = content
+    .replace(/^```(?:json)?\s*\n?/, '')  // Remove opening ```json with optional whitespace
+    .replace(/\n?```\s*$/, '')            // Remove closing ``` with optional whitespace
+    .trim();
+
   try {
-    return JSON.parse(content);
+    return JSON.parse(cleanContent);
   } catch (err) {
     console.log("⚠️ AI returned invalid JSON:", content);
     return null;
