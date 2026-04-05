@@ -3,7 +3,11 @@ node_modules
 **/*app.log
 *.key
 *.pem
-
+temp-secret.yaml
+agent/audit/actions.jsonl
+agent/test-audit.jsonl
+agent/test-slack.js
+agent/test-audit.js
 # Local config
 .kube/
 kubeconfig

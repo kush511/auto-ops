@@ -1,21 +1,28 @@
 #!/bin/bash
-# Usage: ./scripts/create-sealed-secret.sh <secret-name> <key-name> <plaintext-value>
+set -euo pipefail
 
-SECRET_NAME=$1
-KEY_NAME=$2
-PLAINTEXT_VALUE=$3
+# Usage:
+# ./scripts/create-sealed-secret.sh <inception_api_key> <slack_webhook_url>
 
-# Create temporary secret
-kubectl create secret generic $SECRET_NAME \
+INCEPTION_API_KEY="${1:-}"
+SLACK_WEBHOOK_URL="${2:-}"
+
+if [[ -z "$INCEPTION_API_KEY" || -z "$SLACK_WEBHOOK_URL" ]]; then
+    echo "Usage: ./scripts/create-sealed-secret.sh <inception_api_key> <slack_webhook_url>"
+    exit 1
+fi
+
+TEMP_SECRET_FILE="temp-secret.yaml"
+OUTPUT_FILE="ops/sealed-secret.yaml"
+
+kubectl create secret generic inception-secret \
     --dry-run=client \
-    --from-literal=$KEY_NAME="$PLAINTEXT_VALUE" \
-    -o yaml > temp-secret.yaml
+    --from-literal=api-key="$INCEPTION_API_KEY" \
+    --from-literal=slack-webhook-url="$SLACK_WEBHOOK_URL" \
+    -o yaml > "$TEMP_SECRET_FILE"
 
-# Seal it
-kubeseal --format yaml < temp-secret.yaml > ops/sealed-$SECRET_NAME.yaml
+kubeseal --format yaml < "$TEMP_SECRET_FILE" > "$OUTPUT_FILE"
+rm -f "$TEMP_SECRET_FILE"
 
-# Clean up
-rm temp-secret.yaml
-
-echo "Sealed secret created at k8s/sealed-$SECRET_NAME.yaml"
-echo "You can now commit this file to git"
+echo "Sealed secret created at $OUTPUT_FILE"
+echo "Apply with: kubectl apply -f $OUTPUT_FILE"

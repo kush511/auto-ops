@@ -1,4 +1,9 @@
 async function analyzeLogs(logs) {
+  if (!process.env.INCEPTION_API_KEY) {
+    console.log('ℹ️ INCEPTION_API_KEY not set, skipping external AI analysis');
+    return null;
+  }
+
   const prompt = `
 You are a seasoned DevOps expert specializing in system monitoring and incident response.
 
@@ -39,21 +44,33 @@ ${logs}
   const controller = new AbortController();
   setTimeout(() => controller.abort(), 30000);
 
-  const response = await fetch('https://api.inceptionlabs.ai/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.INCEPTION_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'mercury-2',
-      messages: [{ role: 'user', content: prompt }],
-      reasoning_effort: 'instant'
-    }),
-    signal: controller.signal
-  });
+  let response;
+  try {
+    response = await fetch('https://api.inceptionlabs.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.INCEPTION_API_KEY}`
+      },
+      body: JSON.stringify({
+        model: 'mercury-2',
+        messages: [{ role: 'user', content: prompt }],
+        reasoning_effort: 'instant'
+      }),
+      signal: controller.signal
+    });
+  } catch (error) {
+    console.error('⚠️ External AI request failed, using fallback:', error.message);
+    return null;
+  }
 
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    console.error('⚠️ Failed to parse AI response, using fallback:', error.message);
+    return null;
+  }
 
   if (!response.ok) {
     console.error("❌ AI API error:", data.error || data);

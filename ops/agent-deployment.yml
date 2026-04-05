@@ -13,15 +13,63 @@ spec:
         app: agent
     spec:
       serviceAccountName: agent-sa
+      automountServiceAccountToken: true
+      volumes:
+        - name: audit-volume
+          emptyDir: {}
       containers:
         - name: agent
           image: agent:latest
           imagePullPolicy: IfNotPresent
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /tmp/kubeconfig <<EOF
+              apiVersion: v1
+              kind: Config
+              clusters:
+              - name: in-cluster
+                cluster:
+                  server: https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}
+                  certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              users:
+              - name: agent
+                user:
+                  token: $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              contexts:
+              - name: in-cluster
+                context:
+                  cluster: in-cluster
+                  user: agent
+                  namespace: ${K8S_NAMESPACE:-default}
+              current-context: in-cluster
+              EOF
+              export KUBECONFIG=/tmp/kubeconfig
+              exec node src/core/index.js
+          volumeMounts:
+            - name: audit-volume
+              mountPath: /agent/audit
           env:
             - name: INCEPTION_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: inception-secret  
+                  name: inception-secret
                   key: api-key
-            - name: LOG_PATH
-              value: "/agent/logs/app.log"
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: inception-secret
+                  key: slack-webhook-url
+                  optional: true
+            - name: DEPLOYMENT_NAME
+              value: "app-deployment"
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: CHECK_INTERVAL
+              value: "45000"
+            - name: ACTION_COOLDOWN_MS
+              value: "120000"
+            - name: AUDIT_LOG_PATH
+              value: "/agent/audit/actions.jsonl"
