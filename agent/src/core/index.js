@@ -2,14 +2,14 @@
 
 const AuditLogger = require('../audit/logger');
 const SlackAlert = require('../alerts/slack');
-const analyzeLogsWithAi = require('./ai');
-const decideAction = require('./decision');
-const actions = require('./actions');
+const LowConfidenceLogger = require('../audit/confidence-logger');
+const TwoStageLLM = require('./two-stage');
+const ActionExecutor = require('./action-executor');
 require('dotenv').config();
 
 /**
  * Auto-Ops Agent Main Class
- * Phase 2: Adds audit logging and Slack alerts
+ * Phase 3: Two-stage LLM reasoning with runbook context
  */
 class AutoOpsAgent {
   constructor() {
@@ -30,6 +30,28 @@ class AutoOpsAgent {
     this.checkInterval = parseInt(process.env.CHECK_INTERVAL) || 30000;
     this.actionCooldownMs = parseInt(process.env.ACTION_COOLDOWN_MS) || 120000;
     this.lastSuccessfulActionAt = new Map();
+
+    // Initialize TwoStageLLM with runbook path
+    const runbookPath = process.env.RUNBOOK_PATH || './agent/runbook.md';
+    this.llm = new TwoStageLLM(process.env.INCEPTION_API_KEY, runbookPath);
+
+    // Load runbook asynchronously
+    this.llm.loadRunbook().catch(err =>
+      console.error('Failed to load runbook:', err.message)
+    );
+
+    // Initialize ActionExecutor
+    this.executor = new ActionExecutor(this.deploymentName, this.namespace);
+
+    // Hybrid scale-down tracking
+    this.healthyCycles = 0;
+    this.healthyCycleThreshold = parseInt(process.env.HEALTHY_CYCLE_THRESHOLD) || 3;
+    console.log(` Healthy cycle threshold: ${this.healthyCycleThreshold} cycles before scale down`);
+
+    // Initialize Low Confidence Logger for Phase 3.4
+    const confLogPath = process.env.LOW_CONFIDENCE_LOG_PATH || '/agent/audit/low-confidence.jsonl';
+    const confThreshold = parseFloat(process.env.LOW_CONFIDENCE_THRESHOLD) || 0.6;
+    this.confidenceLogger = new LowConfidenceLogger(confLogPath, confThreshold);
   }
 
   buildActionSignature(action, analysis) {
@@ -54,44 +76,6 @@ class AutoOpsAgent {
   }
 
   /**
-   * Fallback log analysis when INCEPTION_API_KEY is unavailable.
-   */
-  simulateAnalyzeLogs(logs) {
-    const hasErrors = logs.some((line) =>
-      line.includes('error') || line.includes('500') || line.includes('Exception')
-    );
-
-    if (hasErrors) {
-      return {
-        issue: 'High error rate detected in application logs',
-        severity: 'high',
-        confidence: 0.85,
-        suggested_action: 'restart',
-        reasoning: 'Multiple error patterns detected in recent logs'
-      };
-    }
-
-    return {
-      issue: 'System operating normally',
-      severity: 'low',
-      confidence: 0.95,
-      suggested_action: 'none',
-      reasoning: 'No anomalies detected in log patterns'
-    };
-  }
-
-  async analyzeLogs(logs) {
-    if (process.env.INCEPTION_API_KEY) {
-      const aiResult = await analyzeLogsWithAi(logs.join('\n'));
-      if (aiResult) {
-        return aiResult;
-      }
-      console.log('⚠️ AI analysis unavailable, using fallback simulator');
-    }
-    return this.simulateAnalyzeLogs(logs);
-  }
-
-  /**
    * Collect logs from the application
    * For now, we'll fetch from kubectl
    */
@@ -112,6 +96,59 @@ class AutoOpsAgent {
   }
 
   /**
+   * Map new action names to old names for backward compatibility
+   */
+  mapActionName(newAction) {
+    const mapping = {
+      'restart': 'restart_service',
+      'scale': 'scale_service',
+      'scaleDown': 'scale_down_service',
+      'rollback': 'rollback_service',
+      'log_only': 'log_only'
+    };
+    return mapping[newAction] || newAction;
+  }
+
+  /**
+   * Check if we should recommend scale down based on healthy cycles
+   */
+  shouldScaleDown(currentReplicas, llmResult) {
+    // Only consider scale down if:
+    // 1. Current replicas > 1 (something to scale down from)
+    // 2. LLM recommends log_only (normal operation)
+    // 3. We've had N consecutive healthy cycles
+
+    if (currentReplicas <= 1) {
+      return false;  // Already at minimum
+    }
+
+    if (llmResult.action !== 'log_only') {
+      return false;  // Not normal operation
+    }
+
+    // We're in normal operation, increment healthy cycles
+    this.healthyCycles++;
+    console.log(` Healthy cycles: ${this.healthyCycles}/${this.healthyCycleThreshold}`);
+
+    if (this.healthyCycles >= this.healthyCycleThreshold) {
+      console.log(` ✅ Threshold reached! Ready to scale down.`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Reset healthy cycle counter on any issue
+   */
+  resetHealthyCycles(reason) {
+    if (this.healthyCycles > 0) {
+      console.log(` ⚠️ Resetting healthy cycles (${reason})`);
+      this.healthyCycles = 0;
+    }
+  }
+
+  /**
    * Main monitoring cycle
    */
   async runCycle() {
@@ -121,54 +158,100 @@ class AutoOpsAgent {
     const logs = await this.collectLogs();
     console.log(` Collected ${logs.length} log lines`);
 
-    const analysis = await this.analyzeLogs(logs);
-    console.log(` Analysis: ${analysis.issue}`);
-    console.log(`   Severity: ${analysis.severity} | Confidence: ${(analysis.confidence * 100).toFixed(1)}%`);
+    // Stage 1 & 2: Two-stage LLM reasoning
+    const llmResult = await this.llm.analyze(logs);
+    console.log(`\n 📊 LLM Analysis Result:`);
+    console.log(`   Diagnosis: ${llmResult.diagnosis?.issue_type || 'Unknown'}`);
+    console.log(`   Plan Action: ${llmResult.action}`);
+    console.log(`   Confidence: ${(llmResult.confidence * 100).toFixed(1)}%`);
 
-    let action = 'log_only';
+    // Get current replicas for scale down decision
+    const currentReplicas = await this.getCurrentReplicas();
+
+    let actionName = llmResult.action || 'log_only';  // New action name (restart, scale, rollback, log_only)
+
+    // Hybrid logic: Check if we should recommend scale down
+    if (this.shouldScaleDown(currentReplicas, llmResult)) {
+      console.log(` 📉 Promoting action to scaleDown (healthy cycles threshold met)`);
+      actionName = 'scaleDown';  // Override to scale down
+    } else if (actionName !== 'log_only') {
+      // Any non-healthy action resets the cycle counter
+      this.resetHealthyCycles(`non-healthy action: ${actionName}`);
+    }
+
+    let actionLegacy = this.mapActionName(actionName);  // Legacy name for audit (restart_service, etc.)
     let actionTaken = null;
     let actionSuppressed = false;
 
-    const currentReplicas = await this.getCurrentReplicas();
-    const decision = decideAction(analysis, currentReplicas);
-    action = decision.action;
-    const reasoningText = analysis.reasoning || decision.reason || 'AI detected anomaly';
+    // Build analysis object for backward compatibility
+    const analysis = {
+      issue: llmResult.diagnosis?.issue_type || 'Analysis complete',
+      severity: llmResult.diagnosis?.severity || 'low',
+      confidence: llmResult.confidence,
+      reasoning: llmResult.reasoning
+    };
 
-    if (this.shouldSuppressDuplicateAction(action, analysis)) {
+    const reasoningText = llmResult.reasoning || 'AI detected anomaly';
+
+    if (this.shouldSuppressDuplicateAction(actionLegacy, analysis)) {
       actionSuppressed = true;
-      console.log(` Duplicate action suppressed: ${action} (cooldown ${this.actionCooldownMs / 1000}s)`);
+      console.log(` Duplicate action suppressed: ${actionLegacy} (cooldown ${this.actionCooldownMs / 1000}s)`);
     }
 
-    if (!actionSuppressed && decision.action === 'restart_service') {
-      actionTaken = await actions.restartDeployment(this.deploymentName, this.namespace);
-      if (actionTaken?.success) this.markActionExecuted(action, analysis);
-    } else if (!actionSuppressed && decision.action === 'scale_service') {
-      actionTaken = await actions.scaleDeployment(this.deploymentName, this.namespace, 3);
-      if (actionTaken?.success) this.markActionExecuted(action, analysis);
-    } else if (!actionSuppressed && decision.action === 'scale_down_service') {
-      actionTaken = await actions.scaleDownDeployment(this.deploymentName, this.namespace, 1);
-      if (actionTaken?.success) this.markActionExecuted(action, analysis);
+    // Execute action via ActionExecutor
+    if (!actionSuppressed && actionName !== 'log_only') {
+      const params = {};
+
+      // Add action-specific parameters
+      if (actionName === 'scale') {
+        params.replicas = llmResult.plan?.parameters?.replicas || 3;
+      } else if (actionName === 'scaleDown') {
+        params.replicas = llmResult.plan?.parameters?.replicas || 1;
+      }
+
+      actionTaken = await this.executor.execute(actionName, params);
+
+      if (actionTaken?.success) {
+        this.markActionExecuted(actionLegacy, analysis);
+        // Reset healthy cycles after successful action
+        if (actionName === 'scaleDown') {
+          this.healthyCycles = 0;  // Reset counter after scaling down
+          console.log(` Healthy cycles reset after scale down`);
+        }
+      }
+    } else if (!actionSuppressed && actionName === 'log_only') {
+      actionTaken = await this.executor.execute('log_only');
     } else if (actionSuppressed) {
-      action = 'suppressed_duplicate_action';
+      actionLegacy = 'suppressed_duplicate_action';
       console.log(' Action suppressed — no kubectl call needed');
-    } else {
-      console.log(` Action: ${decision.action} — no kubectl call needed`);
     }
 
+    // Audit logging (backward compatible format)
     const auditEntry = await this.auditLogger.log({
       deployment: this.deploymentName,
       namespace: this.namespace,
       issue: analysis.issue,
       severity: analysis.severity,
       confidence: analysis.confidence,
-      action: action,
+      action: actionLegacy,
       action_success: actionTaken ? actionTaken.success : null,
-      decision,
+      diagnosis: llmResult.diagnosis,
+      plan: llmResult.plan,
       reasoning: reasoningText,
       log_sample: logs.slice(0, 10)
     });
 
-    const shouldNotify = !actionSuppressed && action !== 'log_only';
+    // Phase 3.4: Log low-confidence decisions for tuning
+    await this.confidenceLogger.logIfNeeded({
+      confidence: llmResult.confidence,
+      action: actionName,
+      diagnosis: llmResult.diagnosis,
+      reasoning: reasoningText,
+      logs: logs
+    });
+
+    // Slack notification
+    const shouldNotify = !actionSuppressed && actionName !== 'log_only';
     if (shouldNotify) {
       if (this.slack) {
         await this.slack.send({
@@ -177,7 +260,7 @@ class AutoOpsAgent {
           issue: analysis.issue || 'Unknown issue',
           severity: analysis.severity || 'low',
           confidence: analysis.confidence,
-          action: action,
+          action: actionLegacy,
           reasoning: `${reasoningText}${auditEntry?.id ? ` | audit_id=${auditEntry.id}` : ''}`
         });
       } else {
@@ -188,7 +271,7 @@ class AutoOpsAgent {
     }
 
     console.log(' ===== Cycle Complete =====');
-    return { analysis, action, auditEntry };
+    return { analysis, action: actionLegacy, auditEntry };
   }
 
   async getCurrentReplicas() {
@@ -211,10 +294,11 @@ class AutoOpsAgent {
    * Start the agent
    */
   start() {
-    console.log(' Auto-Ops Agent v2.0 Starting...');
+    console.log(' Auto-Ops Agent v3.0 Starting...');
     console.log(` Target deployment: ${this.deploymentName} (namespace: ${this.namespace})`);
     console.log(`  Check interval: ${this.checkInterval / 1000} seconds`);
     console.log(`  Action cooldown: ${this.actionCooldownMs / 1000} seconds`);
+    console.log(` Phase 3: Two-stage LLM reasoning with runbook context`);
     console.log('----------------------------------------\n');
 
     this.runCycle().catch(console.error);

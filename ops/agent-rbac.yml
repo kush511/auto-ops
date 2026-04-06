@@ -18,6 +18,10 @@ rules:
     verbs: ["get", "list", "update", "patch"]
 
   - apiGroups: ["apps"]
+    resources: ["deployments/rollback"]
+    verbs: ["create"]
+
+  - apiGroups: ["apps"]
     resources: ["replicasets"]
     verbs: ["get", "list"]
 

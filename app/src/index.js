@@ -1,10 +1,14 @@
 const express = require("express");
 const logger = require("./utils/logger");
+const { router: chaosRoutes, chaosMiddleware } = require("./routes/chaos");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
+
+// Apply chaos middleware BEFORE regular routes
+app.use(chaosMiddleware);
 
 app.use((req, res, next) => {
   logger.info("Incoming request", {
@@ -13,10 +17,14 @@ app.use((req, res, next) => {
   });
   next();
 });
-// Health check
+
+app.get("/", (req, res) => {
+  res.json({ message: "App is running", timestamp: new Date().toISOString() });
+});
+
 app.get("/health", (req, res) => {
   logger.info("Health check called");
-  res.json({ status: "ok" });
+  res.json({ status: "healthy", timestamp: new Date().toISOString() });
 });
 
 // Simulate error
@@ -27,19 +35,19 @@ app.get("/simulate-error", (req, res) => {
   res.status(500).json({ error: "Simulated failure" });
 });
 
-// Simulate latency
-app.get("/simulate-latency", async (req, res) => {
-  const delay = Math.floor(Math.random() * 3000);
-
-  await new Promise((resolve) => setTimeout(resolve, delay));
-
-  if (delay > 2000) {
-    logger.warn("High response latency detected", { delay });
-  }
-
-  res.json({ delay });
+// Error handling middleware (must be after routes)
+app.use((err, req, res, next) => {
+  logger.error("Error", { message: err.message });
+  res.status(500).json({
+    error: err.message,
+    timestamp: new Date().toISOString()
+  });
 });
+
+// Chaos routes
+app.use(chaosRoutes);
 
 app.listen(PORT, () => {
   logger.info(`Server started on port ${PORT}`);
+  logger.info("Chaos endpoints available at /chaos/errors, /chaos/latency, /chaos/stop");
 });

@@ -17,6 +17,9 @@ spec:
       volumes:
         - name: audit-volume
           emptyDir: {}
+        - name: runbook-volume
+          configMap:
+            name: agent-runbook
       containers:
         - name: agent
           image: agent:latest
@@ -49,6 +52,8 @@ spec:
           volumeMounts:
             - name: audit-volume
               mountPath: /agent/audit
+            - name: runbook-volume
+              mountPath: /etc/agent/runbook
           env:
             - name: INCEPTION_API_KEY
               valueFrom:
@@ -73,3 +78,11 @@ spec:
               value: "120000"
             - name: AUDIT_LOG_PATH
               value: "/agent/audit/actions.jsonl"
+            - name: RUNBOOK_PATH
+              value: "/etc/agent/runbook/runbook.md"
+            - name: HEALTHY_CYCLE_THRESHOLD
+              value: "3"
+            - name: LOW_CONFIDENCE_LOG_PATH
+              value: "/agent/audit/low-confidence.jsonl"
+            - name: LOW_CONFIDENCE_THRESHOLD
+              value: "0.6"
