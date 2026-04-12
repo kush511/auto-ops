@@ -2,13 +2,16 @@
  * Two-stage LLM reasoning
  * Stage 1: Diagnose - What is happening?
  * Stage 2: Plan - What should we do?
+ *
+ * Includes optional Prometheus metrics for enriched context.
  */
 
 class TwoStageLLM {
-  constructor(apiKey, runbookPath = null) {
+  constructor(apiKey, runbookPath = null, prometheusClient = null) {
     this.apiKey = apiKey;
     this.runbook = null;
     this.runbookPath = runbookPath;
+    this.prometheusClient = prometheusClient;  // Optional: PrometheusClient instance
   }
 
   /**
@@ -53,7 +56,7 @@ class TwoStageLLM {
    * @param {Array} logs - Recent log lines
    * @returns {Object} Diagnosis
    */
-  async diagnose(logs) {
+  async diagnose(logs, deployment = null, namespace = 'default') {
     // Filter to only recent logs (last 30 seconds)
     const recentLogs = this.filterRecentLogs(logs, 30);
     const logText = recentLogs.slice(-20).join('\n');
@@ -61,6 +64,22 @@ class TwoStageLLM {
     const runbookPatterns = this.runbook
       ? `\nKnown failure patterns from runbook:\n${this.runbook}\n`
       : '';
+
+    // Query Prometheus metrics if available
+    let metricsContext = '';
+    if (this.prometheusClient && deployment) {
+      try {
+        const metrics = await this.prometheusClient.queryMetrics(deployment, namespace);
+        if (metrics) {
+          metricsContext = `\n${this.prometheusClient.formatMetricsForPrompt(metrics)}\n`;
+        } else {
+          metricsContext = '\nCurrent metrics: Prometheus unavailable\n';
+        }
+      } catch (error) {
+        console.warn(`Failed to query Prometheus: ${error.message}`);
+        metricsContext = '\nCurrent metrics: Failed to retrieve\n';
+      }
+    }
 
     const prompt = `You are a Kubernetes SRE diagnosing an application issue.
 
@@ -254,11 +273,11 @@ Do not include any other text, only the JSON.`;
   /**
    * Full analysis pipeline
    */
-  async analyze(logs) {
+  async analyze(logs, deployment = null, namespace = 'default') {
     console.log('🧠 Starting two-stage analysis...');
 
-    // Stage 1: Diagnose
-    const diagnosis = await this.diagnose(logs);
+    // Stage 1: Diagnose (with optional Prometheus metrics if deployment provided)
+    const diagnosis = await this.diagnose(logs, deployment, namespace);
 
     // If diagnosis confidence is too low, skip planning
     if (diagnosis.confidence < 0.4) {

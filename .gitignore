@@ -11,3 +11,11 @@ agent/test-audit.js
 # Local config
 .kube/
 kubeconfig
+# scripts
+*.sh
+
+# readme for scripts(will add later)
+DEPLOYMENT.md
+
+# Prometheus queries reference (local monitoring guide)
+PROMETHEUS_QUERIES.md

@@ -1,0 +1,68 @@
+# Prometheus Community Helm Chart Values
+# https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
+
+# Disable components we don't need
+kubeStateMetrics:
+  enabled: false
+
+nodeExporter:
+  enabled: false
+
+grafana:
+  enabled: false
+
+alertmanager:
+  enabled: true
+
+# Configure Prometheus
+prometheus:
+  prometheusSpec:
+    # Data retention
+    retention: 15d
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+    # Scrape intervals
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+
+    # Resource requests and limits
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+    # Service configuration
+    serviceMonitorSelectorNilUsesHelmValues: false
+
+    # Additional scrape configs for our app
+    additionalScrapeConfigs:
+      - job_name: 'auto-ops-app'
+        scrape_interval: 30s
+        scrape_timeout: 10s
+        metrics_path: '/metrics'
+        static_configs:
+          - targets: ['app-service.default.svc.cluster.local:3000']
+        relabel_configs:
+          - source_labels: [__address__]
+            target_label: instance
+            replacement: 'app-pod'
+
+# Prometheus Operator
+prometheusOperator:
+  manageCrds: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

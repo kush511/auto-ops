@@ -20,6 +20,8 @@ spec:
         - name: runbook-volume
           configMap:
             name: agent-runbook
+        - name: heartbeat-volume
+          emptyDir: {}
       containers:
         - name: agent
           image: agent:latest
@@ -54,6 +56,8 @@ spec:
               mountPath: /agent/audit
             - name: runbook-volume
               mountPath: /etc/agent/runbook
+            - name: heartbeat-volume
+              mountPath: /agent/heartbeat
           env:
             - name: INCEPTION_API_KEY
               valueFrom:
@@ -66,7 +70,7 @@ spec:
                   name: inception-secret
                   key: slack-webhook-url
                   optional: true
-            - name: DEPLOYMENT_NAME
+            - name: DEPLOYMENTS
               value: "app-deployment"
             - name: K8S_NAMESPACE
               valueFrom:
@@ -86,3 +90,29 @@ spec:
               value: "/agent/audit/low-confidence.jsonl"
             - name: LOW_CONFIDENCE_THRESHOLD
               value: "0.6"
+            - name: HEARTBEAT_PATH
+              value: "/agent/heartbeat/timestamp.txt"
+            - name: PROMETHEUS_URL
+              value: "http://prometheus-operated.monitoring.svc.cluster.local:9090"
+        - name: watchdog
+          image: agent-watchdog:latest
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: heartbeat-volume
+              mountPath: /agent/heartbeat
+          env:
+            - name: HEARTBEAT_PATH
+              value: "/agent/heartbeat/timestamp.txt"
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: inception-secret
+                  key: slack-webhook-url
+                  optional: true
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "10m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"

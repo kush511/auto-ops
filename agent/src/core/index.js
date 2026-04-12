@@ -5,11 +5,15 @@ const SlackAlert = require('../alerts/slack');
 const LowConfidenceLogger = require('../audit/confidence-logger');
 const TwoStageLLM = require('./two-stage');
 const ActionExecutor = require('./action-executor');
+const HeartbeatWriter = require('./heartbeat');
+const PrometheusClient = require('../metrics/prometheus-client');
+const LogStreamManager = require('./log-stream');
+const DeploymentManager = require('./deployment-manager');
 require('dotenv').config();
 
 /**
  * Auto-Ops Agent Main Class
- * Phase 3: Two-stage LLM reasoning with runbook context
+ * Phase 4: Production hardening with multi-deployment, metrics, and liveness checks
  */
 class AutoOpsAgent {
   constructor() {
@@ -25,15 +29,21 @@ class AutoOpsAgent {
       console.log(' Slack alerts disabled (no webhook URL)');
     }
 
-    this.deploymentName = process.env.DEPLOYMENT_NAME || 'app-deployment';
+    // Parse deployments - can be single or comma-separated list
+    const deploymentsList = process.env.DEPLOYMENTS || 'app-deployment';
+    this.deployments = deploymentsList.split(',').map(d => d.trim());
+    this.deploymentName = this.deployments[0];  // Primary deployment for single-mode
+
     this.namespace = process.env.K8S_NAMESPACE || 'default';
     this.checkInterval = parseInt(process.env.CHECK_INTERVAL) || 30000;
     this.actionCooldownMs = parseInt(process.env.ACTION_COOLDOWN_MS) || 120000;
     this.lastSuccessfulActionAt = new Map();
 
-    // Initialize TwoStageLLM with runbook path
+    // Initialize TwoStageLLM with runbook path and optional PrometheusClient
     const runbookPath = process.env.RUNBOOK_PATH || './agent/runbook.md';
-    this.llm = new TwoStageLLM(process.env.INCEPTION_API_KEY, runbookPath);
+    const prometheusUrl = process.env.PROMETHEUS_URL || 'http://prometheus-operated.monitoring.svc.cluster.local:9090';
+    const prometheusClient = new PrometheusClient(prometheusUrl);
+    this.llm = new TwoStageLLM(process.env.INCEPTION_API_KEY, runbookPath, prometheusClient);
 
     // Load runbook asynchronously
     this.llm.loadRunbook().catch(err =>
@@ -42,6 +52,13 @@ class AutoOpsAgent {
 
     // Initialize ActionExecutor
     this.executor = new ActionExecutor(this.deploymentName, this.namespace);
+
+    // Initialize HeartbeatWriter for dead man's switch (Phase 4.3)
+    const heartbeatPath = process.env.HEARTBEAT_PATH || '/agent/heartbeat/timestamp.txt';
+    this.heartbeat = new HeartbeatWriter(heartbeatPath);
+
+    // Initialize LogStreamManager with exponential backoff (Phase 4.4)
+    this.logStream = new LogStreamManager(this.deploymentName, this.namespace);
 
     // Hybrid scale-down tracking
     this.healthyCycles = 0;
@@ -52,6 +69,9 @@ class AutoOpsAgent {
     const confLogPath = process.env.LOW_CONFIDENCE_LOG_PATH || '/agent/audit/low-confidence.jsonl';
     const confThreshold = parseFloat(process.env.LOW_CONFIDENCE_THRESHOLD) || 0.6;
     this.confidenceLogger = new LowConfidenceLogger(confLogPath, confThreshold);
+
+    // Multi-deployment manager (only initialized if multiple deployments)
+    this.deploymentManager = null;
   }
 
   buildActionSignature(action, analysis) {
@@ -76,23 +96,11 @@ class AutoOpsAgent {
   }
 
   /**
-   * Collect logs from the application
-   * For now, we'll fetch from kubectl
+   * Collect logs using LogStreamManager with exponential backoff retry
+   * Handles pod restarts gracefully with 15-20 second connection timeout
    */
   async collectLogs() {
-    const { exec } = require('child_process');
-    const util = require('util');
-    const execPromise = util.promisify(exec);
-
-    try {
-      const { stdout } = await execPromise(
-        `kubectl logs deployment/${this.deploymentName} -n ${this.namespace} --tail=50 2>/dev/null || echo "No logs found"`
-      );
-      return stdout.split('\n').filter((line) => line.trim());
-    } catch (error) {
-      console.error('Failed to collect logs:', error.message);
-      return [];
-    }
+    return await this.logStream.collectLogsWithBackoff();
   }
 
   /**
@@ -158,8 +166,8 @@ class AutoOpsAgent {
     const logs = await this.collectLogs();
     console.log(` Collected ${logs.length} log lines`);
 
-    // Stage 1 & 2: Two-stage LLM reasoning
-    const llmResult = await this.llm.analyze(logs);
+    // Stage 1 & 2: Two-stage LLM reasoning with optional Prometheus metrics
+    const llmResult = await this.llm.analyze(logs, this.deploymentName, this.namespace);
     console.log(`\n 📊 LLM Analysis Result:`);
     console.log(`   Diagnosis: ${llmResult.diagnosis?.issue_type || 'Unknown'}`);
     console.log(`   Plan Action: ${llmResult.action}`);
@@ -293,25 +301,49 @@ class AutoOpsAgent {
   /**
    * Start the agent
    */
-  start() {
-    console.log(' Auto-Ops Agent v3.0 Starting...');
-    console.log(` Target deployment: ${this.deploymentName} (namespace: ${this.namespace})`);
+  async start() {
+    console.log(' Auto-Ops Agent v4.0 Starting...');
+    console.log(` Deployment(s): ${this.deployments.join(', ')}`);
+    console.log(` Namespace: ${this.namespace}`);
     console.log(`  Check interval: ${this.checkInterval / 1000} seconds`);
     console.log(`  Action cooldown: ${this.actionCooldownMs / 1000} seconds`);
-    console.log(` Phase 3: Two-stage LLM reasoning with runbook context`);
+    console.log(` Phase 4: Production hardening with metrics, multi-deployment, and liveness`);
     console.log('----------------------------------------\n');
 
-    this.runCycle().catch(console.error);
+    // Initialize heartbeat for dead man's switch
+    try {
+      const heartbeatInitialized = await this.heartbeat.initialize();
+      if (heartbeatInitialized) {
+        this.heartbeat.startHeartbeat(60000);  // 60 second heartbeat interval
+      }
+    } catch (error) {
+      console.warn(`❌ Failed to initialize heartbeat: ${error.message}`);
+    }
 
-    setInterval(() => {
+    // Detect single vs multi-deployment mode
+    if (this.deployments.length > 1) {
+      console.log(` Multi-deployment mode: ${this.deployments.length} deployments`);
+      // Spawn DeploymentManager to handle parallel workers
+      this.deploymentManager = new DeploymentManager(this.deployments);
+      this.deploymentManager.startAll();
+      // Set up graceful shutdown
+      this.deploymentManager.onShutdown(() => {
+        console.log('Agent shutting down gracefully');
+      });
+    } else {
+      console.log(` Single-deployment mode: ${this.deploymentName}`);
+      // Run single-deployment monitoring loop
       this.runCycle().catch(console.error);
-    }, this.checkInterval);
+      setInterval(() => {
+        this.runCycle().catch(console.error);
+      }, this.checkInterval);
+    }
   }
 }
 
 if (require.main === module) {
   const agent = new AutoOpsAgent();
-  agent.start();
+  agent.start().catch(console.error);
 }
 
 module.exports = AutoOpsAgent;

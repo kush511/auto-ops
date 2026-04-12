@@ -1,13 +1,20 @@
 const express = require("express");
 const logger = require("./utils/logger");
 const { router: chaosRoutes, chaosMiddleware } = require("./routes/chaos");
+const MetricsMiddleware = require("./middleware/metrics");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Initialize metrics middleware
+const metricsMiddleware = new MetricsMiddleware();
+
 app.use(express.json());
 
-// Apply chaos middleware BEFORE regular routes
+// Apply metrics middleware first (before all routes)
+app.use(metricsMiddleware.middleware());
+
+// Apply chaos middleware
 app.use(chaosMiddleware);
 
 app.use((req, res, next) => {
@@ -17,6 +24,9 @@ app.use((req, res, next) => {
   });
   next();
 });
+
+// Prometheus metrics endpoint
+app.get("/metrics", metricsMiddleware.metricsHandler());
 
 app.get("/", (req, res) => {
   res.json({ message: "App is running", timestamp: new Date().toISOString() });
