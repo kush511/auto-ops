@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-callback
+  namespace: default
+  labels:
+    app: agent
+    component: callback-server
+spec:
+  type: ClusterIP
+  selector:
+    app: agent
+  ports:
+    - port: 3001
+      targetPort: 3001
+      protocol: TCP
+      name: callback
+  # For production/cloud deployments, change type to LoadBalancer or use Ingress
+  # type: LoadBalancer
+  # externalTrafficPolicy: Local  # Preserves source IP for proper authentication

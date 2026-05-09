@@ -159,6 +159,104 @@ class SlackAlert {
     };
     return emojis[severity] || '⚪';
   }
+
+  /**
+   * Send approval request to Slack with interactive buttons
+   * Uses Block Kit for rich message formatting
+   * @param {string} approvalId - The approval request ID (stored in button value)
+   * @param {string} action - The action being requested (rollback, scaleDown, etc)
+   * @param {string} deployment - The deployment name
+   * @param {number} confidence - The confidence score (0-1)
+   * @returns {Promise<Object>} Result of the send attempt
+   */
+  async sendApprovalRequest(approvalId, action, deployment, confidence) {
+    const payload = {
+      text: `Action approval needed for ${deployment}`,
+      blocks: [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '⏳ Action Approval Required',
+            emoji: true
+          }
+        },
+        {
+          type: 'section',
+          fields: [
+            {
+              type: 'mrkdwn',
+              text: `*Deployment:*\n${deployment}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Action:*\n${action}`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Confidence:*\n${(confidence * 100).toFixed(1)}%`
+            },
+            {
+              type: 'mrkdwn',
+              text: `*Approval ID:*\n\`${approvalId}\``
+            }
+          ]
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '_This action requires your approval before execution. Click Approve to execute immediately or Reject to cancel._'
+          }
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: 'Approve',
+                emoji: true
+              },
+              action_id: 'approve_action',  // static action ID
+              value: approvalId,            // dynamic approval ID
+              style: 'primary'
+            },
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: 'Reject',
+                emoji: true
+              },
+              action_id: 'reject_action',   // static action ID
+              value: approvalId,            // dynamic approval ID
+              style: 'danger'
+            }
+          ]
+        }
+      ]
+    };
+
+    try {
+      const response = await fetch(this.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        console.log(`✅ Approval request sent to Slack: ${approvalId}`);
+        return { sent: true, approvalId };
+      } else {
+        throw new Error(`HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.error(`❌ Failed to send approval request to Slack: ${error.message}`);
+      return { sent: false, error: error.message };
+    }
+  }
 }
 
 module.exports = SlackAlert;

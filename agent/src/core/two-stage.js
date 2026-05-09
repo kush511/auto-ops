@@ -108,6 +108,18 @@ Do not include any other text, only the JSON.`;
 
     const response = await this.callLLM(prompt);
 
+    // Handle LLM API failure
+    if (!response) {
+      console.error('❌ LLM API unavailable, using fallback diagnosis');
+      return {
+        issue_type: 'LLM error',
+        root_cause: 'Inception API unreachable',
+        severity: 'low',
+        confidence: 0.2,
+        evidence: 'LLM API call failed - unable to analyze'
+      };
+    }
+
     let diagnosis;
     try {
       diagnosis = JSON.parse(response);
@@ -186,6 +198,17 @@ Do not include any other text, only the JSON.`;
 
     const response = await this.callLLM(prompt);
 
+    // Handle LLM API failure
+    if (!response) {
+      console.error('❌ LLM API unavailable, falling back to log_only');
+      return {
+        recommended_action: 'log_only',
+        reasoning: 'LLM API unreachable - cannot generate plan',
+        confidence: 0.1,
+        parameters: {}
+      };
+    }
+
     let plan;
     try {
       plan = JSON.parse(response);
@@ -223,18 +246,42 @@ Do not include any other text, only the JSON.`;
 
     let response;
     try {
-      response = await fetch('https://api.inceptionlabs.ai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
-        },
-        body: JSON.stringify({
-          model: 'mercury-2',
-          messages: [{ role: 'user', content: prompt }],
-          reasoning_effort: 'instant'
-        }),
-        signal: controller.signal
+      const https = require('https');
+      const payload = JSON.stringify({
+        model: 'mercury-2',
+        messages: [{ role: 'user', content: prompt }],
+        reasoning_effort: 'instant'
+      });
+
+      response = await new Promise((resolve, reject) => {
+        const req = https.request(
+          'https://api.inceptionlabs.ai/v1/chat/completions',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Length': Buffer.byteLength(payload)
+            },
+            family: 4
+          },
+          (res) => {
+            const chunks = [];
+            res.on('data', (chunk) => chunks.push(chunk));
+            res.on('end', () => {
+              const body = Buffer.concat(chunks).toString('utf8');
+              resolve({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, body });
+            });
+          }
+        );
+
+        req.on('error', reject);
+        controller.signal.addEventListener('abort', () => {
+          req.destroy(new Error('Request aborted'));
+        });
+
+        req.write(payload);
+        req.end();
       });
     } catch (error) {
       console.error('⚠️ LLM API request failed:', error.message);
@@ -243,7 +290,7 @@ Do not include any other text, only the JSON.`;
 
     let data;
     try {
-      data = await response.json();
+      data = JSON.parse(response.body);
     } catch (error) {
       console.error('⚠️ Failed to parse LLM response:', error.message);
       return null;

@@ -9,6 +9,8 @@ const HeartbeatWriter = require('./heartbeat');
 const PrometheusClient = require('../metrics/prometheus-client');
 const LogStreamManager = require('./log-stream');
 const DeploymentManager = require('./deployment-manager');
+const ApprovalManager = require('./approval-manager');
+const SlackCallbackServer = require('../callbacks/slack-callback-server');
 require('dotenv').config();
 
 /**
@@ -50,8 +52,26 @@ class AutoOpsAgent {
       console.error('Failed to load runbook:', err.message)
     );
 
-    // Initialize ActionExecutor
-    this.executor = new ActionExecutor(this.deploymentName, this.namespace);
+    // Initialize ApprovalManager for Slack approval workflow
+    const approvalLogPath = process.env.APPROVAL_LOG_PATH || '/agent/audit/approvals.jsonl';
+    const approvalTimeoutMs = parseInt(process.env.APPROVAL_TIMEOUT_MS) || 300000;  // 5 minutes
+    this.approvalManager = new ApprovalManager(approvalLogPath, approvalTimeoutMs);
+    this.approvalManager.initialize().catch(err =>
+      console.error('Failed to initialize approval manager:', err.message)
+    );
+
+    // Initialize ActionExecutor with approval manager and Slack alerts
+    this.executor = new ActionExecutor(this.deploymentName, this.namespace, this.approvalManager, this.slack);
+
+    // Initialize SlackCallbackServer for handling approvals (will start in start() method)
+    this.callbackServer = null;
+    if (process.env.SLACK_SIGNING_SECRET && process.env.SLACK_WEBHOOK_URL) {
+      const callbackPort = parseInt(process.env.CALLBACK_PORT) || 3001;
+      this.callbackServer = new SlackCallbackServer(this.approvalManager, this.executor, this.slack, callbackPort);
+      console.log(` Slack callback server configured for port ${callbackPort}`);
+    } else {
+      console.log(' Slack callback server disabled (missing SLACK_SIGNING_SECRET or SLACK_WEBHOOK_URL)');
+    }
 
     // Initialize HeartbeatWriter for dead man's switch (Phase 4.3)
     const heartbeatPath = process.env.HEARTBEAT_PATH || '/agent/heartbeat/timestamp.txt';
@@ -163,6 +183,9 @@ class AutoOpsAgent {
     console.log('\n ===== Monitoring Cycle Started =====');
     console.log(` Checking deployment: ${this.deploymentName}`);
 
+    // Check for expired approvals
+    await this.approvalManager.expireOldApprovals();
+
     const logs = await this.collectLogs();
     console.log(` Collected ${logs.length} log lines`);
 
@@ -208,7 +231,9 @@ class AutoOpsAgent {
 
     // Execute action via ActionExecutor
     if (!actionSuppressed && actionName !== 'log_only') {
-      const params = {};
+      const params = {
+        confidence: llmResult.confidence  // Pass confidence for approval requests
+      };
 
       // Add action-specific parameters
       if (actionName === 'scale') {
@@ -219,10 +244,11 @@ class AutoOpsAgent {
 
       actionTaken = await this.executor.execute(actionName, params);
 
-      if (actionTaken?.success) {
+      if (actionTaken?.success || actionTaken?.queued) {
+        // Mark action executed for both immediate execution and approval queuing
         this.markActionExecuted(actionLegacy, analysis);
         // Reset healthy cycles after successful action
-        if (actionName === 'scaleDown') {
+        if (actionName === 'scaleDown' && actionTaken?.success) {
           this.healthyCycles = 0;  // Reset counter after scaling down
           console.log(` Healthy cycles reset after scale down`);
         }
@@ -318,6 +344,15 @@ class AutoOpsAgent {
       }
     } catch (error) {
       console.warn(`❌ Failed to initialize heartbeat: ${error.message}`);
+    }
+
+    // Start Slack callback server if configured
+    if (this.callbackServer) {
+      try {
+        this.callbackServer.start();
+      } catch (error) {
+        console.error(`❌ Failed to start Slack callback server: ${error.message}`);
+      }
     }
 
     // Detect single vs multi-deployment mode

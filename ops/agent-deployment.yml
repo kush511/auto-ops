@@ -26,6 +26,10 @@ spec:
         - name: agent
           image: agent:latest
           imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 3001
+              name: callback
+              protocol: TCP
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -70,6 +74,18 @@ spec:
                   name: inception-secret
                   key: slack-webhook-url
                   optional: true
+            - name: SLACK_SIGNING_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: inception-secret
+                  key: slack-signing-secret
+                  optional: true
+            - name: SLACK_BOT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: inception-secret
+                  key: slack-bot-token
+                  optional: true
             - name: DEPLOYMENTS
               value: "app-deployment"
             - name: K8S_NAMESPACE
@@ -93,7 +109,13 @@ spec:
             - name: HEARTBEAT_PATH
               value: "/agent/heartbeat/timestamp.txt"
             - name: PROMETHEUS_URL
-              value: "http://prometheus-operated.monitoring.svc.cluster.local:9090"
+              value: "http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local.:9090"
+            - name: CALLBACK_PORT
+              value: "3001"
+            - name: APPROVAL_LOG_PATH
+              value: "/agent/audit/approvals.jsonl"
+            - name: APPROVAL_TIMEOUT_MS
+              value: "300000"
         - name: watchdog
           image: agent-watchdog:latest
           imagePullPolicy: IfNotPresent
