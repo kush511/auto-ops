@@ -15,6 +15,4 @@ spec:
       targetPort: 3001
       protocol: TCP
       name: callback
-  # For production/cloud deployments, change type to LoadBalancer or use Ingress
-  # type: LoadBalancer
-  # externalTrafficPolicy: Local  # Preserves source IP for proper authentication
+

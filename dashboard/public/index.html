@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Auto-Ops Live Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Auto-Ops Agent</p>
+          <h1>Live Control Plane</h1>
+          <p class="subhead">
+            Real-time view of agent decisions, deployment health, and live app logs.
+          </p>
+        </div>
+        <div class="status-pill" id="last-updated">Updating...</div>
+      </header>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Deployments</h2>
+          <div id="deployments" class="deployments"></div>
+        </article>
+
+        <article class="panel">
+          <h2>Today</h2>
+          <div class="stats">
+            <div class="stat">
+              <span class="stat-label">Restarts</span>
+              <span class="stat-value" id="restarts-today">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Scales</span>
+              <span class="stat-value" id="scales-today">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Alerts</span>
+              <span class="stat-value" id="alerts-today">0</span>
+            </div>
+          </div>
+          <p class="stat-note">Counts derived from the audit log for the current day.</p>
+        </article>
+
+        <article class="panel span-2">
+          <h2>Recent Decisions</h2>
+          <div class="table">
+            <div class="table-row table-head">
+              <span>Time</span>
+              <span>Deployment</span>
+              <span>Issue</span>
+              <span>Action</span>
+              <span>Approver</span>
+            </div>
+            <div id="decisions"></div>
+          </div>
+        </article>
+
+        <article class="panel span-2">
+          <div class="logs-header">
+            <h2>Live App Log Tail</h2>
+            <span class="muted" id="log-status"></span>
+          </div>
+          <pre class="log-stream" id="log-tail">Waiting for log stream...</pre>
+        </article>
+      </section>
+    </div>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

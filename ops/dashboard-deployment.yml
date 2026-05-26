@@ -1,0 +1,87 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      serviceAccountName: agent-sa
+      automountServiceAccountToken: true
+      volumes:
+        - name: audit-volume
+          persistentVolumeClaim:
+            claimName: audit-pvc
+      containers:
+        - name: dashboard
+          image: auto-ops-dashboard:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              cat > /tmp/kubeconfig <<EOF
+              apiVersion: v1
+              kind: Config
+              clusters:
+              - name: in-cluster
+                cluster:
+                  server: https://${KUBERNETES_SERVICE_HOST}:${KUBERNETES_SERVICE_PORT}
+                  certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+              users:
+              - name: dashboard
+                user:
+                  token: $(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              contexts:
+              - name: in-cluster
+                context:
+                  cluster: in-cluster
+                  user: dashboard
+                  namespace: ${K8S_NAMESPACE:-default}
+              current-context: in-cluster
+              EOF
+              export KUBECONFIG=/tmp/kubeconfig
+              exec node src/index.js
+          volumeMounts:
+            - name: audit-volume
+              mountPath: /dashboard/audit
+          env:
+            - name: PORT
+              value: "8080"
+            - name: AUDIT_LOG_PATH
+              value: "/dashboard/audit/actions.jsonl"
+            - name: APPROVAL_LOG_PATH
+              value: "/dashboard/audit/approvals.jsonl"
+            - name: DEPLOYMENTS
+              value: "app-deployment"
+            - name: APP_LOG_DEPLOYMENT
+              value: "app-deployment"
+            - name: K8S_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-service
+  labels:
+    app: dashboard
+spec:
+  type: NodePort
+  selector:
+    app: dashboard
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+      nodePort: 30080

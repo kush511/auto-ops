@@ -35,7 +35,7 @@ class LogStreamManager {
         if (logs !== null) {
           if (this.consecutiveFailures > 0) {
             console.log(
-              `✓ Log stream reconnected after ${this.consecutiveFailures} ` +
+              `Log stream reconnected after ${this.consecutiveFailures} ` +
               `attempt(s), backoff level was ${this.getCurrentBackoffLevel()}`
             );
             this.consecutiveFailures = 0;
@@ -47,7 +47,7 @@ class LogStreamManager {
       } catch (error) {
         this.consecutiveFailures++;
         console.warn(
-          `✗ Log collection failed (attempt ${this.consecutiveFailures}): ` +
+          `Log collection failed (attempt ${this.consecutiveFailures}): ` +
           `${error.message}`
         );
       }
@@ -55,7 +55,7 @@ class LogStreamManager {
       // Apply exponential backoff before retry
       const backoffLevel = Math.log2(this.currentBackoffMs / this.backoffMs);
       console.log(
-        `↻ Backing off for ${this.currentBackoffMs}ms before retry ` +
+        `Backing off for ${this.currentBackoffMs}ms before retry ` +
         `(backoff level ${backoffLevel})`
       );
       await new Promise(resolve => setTimeout(resolve, this.currentBackoffMs));
@@ -116,7 +116,7 @@ class LogStreamManager {
 
     if (prevBackoffMs !== this.backoffMs) {
       console.log(
-        `↺ Resetting backoff (was at level ${this.getCurrentBackoffLevel()})`
+        `Resetting backoff (was at level ${this.getCurrentBackoffLevel()})`
       );
     }
   }

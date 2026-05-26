@@ -60,7 +60,7 @@ class AuditLogger {
       const logs = lines.slice(-limit).map(line => JSON.parse(line));
       return logs.reverse(); // Most recent first
     } catch (error) {
-      console.error('❌ Failed to read audit log:', error.message);
+      console.error('Failed to read audit log:', error.message);
       return [];
     }
   }

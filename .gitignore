@@ -12,7 +12,7 @@ agent/test-audit.js
 .kube/
 kubeconfig
 # scripts
-*.sh
+
 
 # readme for scripts(will add later)
 DEPLOYMENT.md

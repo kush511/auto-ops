@@ -1,0 +1,242 @@
+:root {
+  color-scheme: light;
+  --ink: #0f172a;
+  --muted: #6b7280;
+  --surface: #f8fafc;
+  --panel: #ffffff;
+  --accent: #f97316;
+  --accent-soft: rgba(249, 115, 22, 0.12);
+  --success: #22c55e;
+  --warning: #eab308;
+  --danger: #ef4444;
+  --shadow: 0 20px 50px rgba(15, 23, 42, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Space Grotesk", "Segoe UI", sans-serif;
+  background: radial-gradient(circle at top left, #fff7ed 0%, #f8fafc 45%, #e2e8f0 100%);
+  color: var(--ink);
+}
+
+.page {
+  min-height: 100vh;
+  padding: 48px clamp(20px, 5vw, 80px) 80px;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 24px;
+  background: var(--panel);
+  padding: 32px 36px;
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  margin-bottom: 32px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: clamp(28px, 4vw, 44px);
+}
+
+.subhead {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.status-pill {
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: var(--shadow);
+}
+
+.panel h2 {
+  margin-top: 0;
+  font-size: 20px;
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+.deployments {
+  display: grid;
+  gap: 16px;
+}
+
+.deployment-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: var(--surface);
+}
+
+.deployment-card h3 {
+  margin: 0 0 4px;
+  font-size: 16px;
+}
+
+.deployment-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.status-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 999px;
+  text-transform: uppercase;
+}
+
+.status-healthy {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.status-degraded {
+  background: rgba(234, 179, 8, 0.2);
+  color: #a16207;
+}
+
+.status-restarting {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.status-unknown {
+  background: rgba(148, 163, 184, 0.2);
+  color: #475569;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.stat {
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-label {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  margin-top: 8px;
+}
+
+.stat-note {
+  margin: 16px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.table {
+  display: grid;
+  gap: 12px;
+}
+
+.table-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr 2fr 1fr 1fr;
+  gap: 12px;
+  font-size: 14px;
+  padding: 8px 0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.table-head {
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid #cbd5f5;
+}
+
+.logs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.log-stream {
+  margin-top: 16px;
+  background: #0b1220;
+  color: #e2e8f0;
+  padding: 18px;
+  border-radius: 16px;
+  font-family: "JetBrains Mono", "SFMono-Regular", monospace;
+  font-size: 12px;
+  min-height: 220px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.2);
+}
+
+@media (max-width: 900px) {
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .span-2 {
+    grid-column: span 1;
+  }
+
+  .table-row {
+    grid-template-columns: 1fr;
+  }
+}

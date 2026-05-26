@@ -16,7 +16,8 @@ spec:
       automountServiceAccountToken: true
       volumes:
         - name: audit-volume
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: audit-pvc
         - name: runbook-volume
           configMap:
             name: agent-runbook

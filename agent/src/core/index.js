@@ -343,7 +343,7 @@ class AutoOpsAgent {
         this.heartbeat.startHeartbeat(60000);  // 60 second heartbeat interval
       }
     } catch (error) {
-      console.warn(`❌ Failed to initialize heartbeat: ${error.message}`);
+      console.warn(` Failed to initialize heartbeat: ${error.message}`);
     }
 
     // Start Slack callback server if configured
@@ -351,7 +351,7 @@ class AutoOpsAgent {
       try {
         this.callbackServer.start();
       } catch (error) {
-        console.error(`❌ Failed to start Slack callback server: ${error.message}`);
+        console.error(` Failed to start Slack callback server: ${error.message}`);
       }
     }
 

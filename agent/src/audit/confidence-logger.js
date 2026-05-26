@@ -21,7 +21,7 @@ class LowConfidenceLogger {
     try {
       const dir = path.dirname(this.logPath);
       await fs.mkdir(dir, { recursive: true });
-      console.log(`📝 Low-confidence logger initialized (threshold: ${this.threshold})`);
+      console.log(`Low-confidence logger initialized (threshold: ${this.threshold})`);
     } catch (error) {
       console.error('Failed to initialize low-confidence logger:', error.message);
     }
@@ -71,7 +71,7 @@ class LowConfidenceLogger {
 
     try {
       await fs.appendFile(this.logPath, JSON.stringify(entry) + '\n');
-      console.log(`📊 Low-confidence decision logged (confidence: ${(confidence * 100).toFixed(1)}%, threshold: ${(this.threshold * 100).toFixed(1)}%)`);
+      console.log(`Low-confidence decision logged (confidence: ${(confidence * 100).toFixed(1)}%, threshold: ${(this.threshold * 100).toFixed(1)}%)`);
     } catch (error) {
       console.error('Failed to write low-confidence log:', error.message);
     }

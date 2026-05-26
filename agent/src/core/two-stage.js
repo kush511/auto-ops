@@ -200,7 +200,7 @@ Do not include any other text, only the JSON.`;
 
     // Handle LLM API failure
     if (!response) {
-      console.error('❌ LLM API unavailable, falling back to log_only');
+      console.error(' LLM API unavailable, falling back to log_only');
       return {
         recommended_action: 'log_only',
         reasoning: 'LLM API unreachable - cannot generate plan',
@@ -213,7 +213,7 @@ Do not include any other text, only the JSON.`;
     try {
       plan = JSON.parse(response);
     } catch (error) {
-      console.error('❌ Failed to parse plan response:', error.message);
+      console.error(' Failed to parse plan response:', error.message);
       return {
         recommended_action: 'log_only',
         reasoning: 'LLM returned invalid JSON for action plan',
@@ -239,7 +239,7 @@ Do not include any other text, only the JSON.`;
       return null;
     }
 
-    console.log('🤖 Calling Inception LLM API...');
+    console.log(' Calling Inception LLM API...');
 
     const controller = new AbortController();
     setTimeout(() => controller.abort(), 30000);  // 30 second timeout

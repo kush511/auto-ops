@@ -24,10 +24,11 @@ kind: Service
 metadata:
   name: app-service
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: my-app
   ports:
     - protocol: TCP
       port: 3000
       targetPort: 3000
+      nodePort: 30000

@@ -54,7 +54,7 @@ class AgentWatchdog {
       // Check if heartbeat is stale
       if (timeSinceUpdate > this.deadThresholdMs) {
         console.error(
-          `🔴 ALERT: Agent appears dead! File not updated for ` +
+          `ALERT: Agent appears dead! File not updated for ` +
           `${(timeSinceUpdate / 1000).toFixed(1)}s`
         );
 
@@ -67,7 +67,7 @@ class AgentWatchdog {
       return { healthy: true, timeSinceUpdate };
     } catch (error) {
       if (error.code === 'ENOENT') {
-        console.error('🔴 ALERT: Heartbeat file missing!');
+        console.error('ALERT: Heartbeat file missing!');
         await this.handleDeadAgentDetection(null, 'File missing');
       } else {
         console.error(`Failed to check heartbeat: ${error.message}`);
@@ -87,7 +87,7 @@ class AgentWatchdog {
     if (this.lastAlertedAt && (now - this.lastAlertedAt) < this.alertDeduplicationMs) {
       const minutesSinceLastAlert = ((now - this.lastAlertedAt) / 60000).toFixed(1);
       console.log(
-        `ℹ Suppressing alert (already alerted ${minutesSinceLastAlert}m ago)`
+        `Suppressing alert (already alerted ${minutesSinceLastAlert}m ago)`
       );
       return;
     }
@@ -107,7 +107,7 @@ class AgentWatchdog {
    */
   async alertSlack(message) {
     if (!this.slackWebhook) {
-      console.log('ℹ Slack not configured, skipping alert');
+      console.log('Slack not configured, skipping alert');
       return;
     }
 
@@ -122,7 +122,7 @@ class AgentWatchdog {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            text: '🔴 Agent Watchdog Alert',
+            text: 'Agent Watchdog Alert',
             attachments: [{
               color: '#ff0000',
               title: 'Dead Man Switch Triggered',
@@ -146,7 +146,7 @@ class AgentWatchdog {
         });
 
         if (response.ok) {
-          console.log('✓ Slack alert sent successfully');
+          console.log('Slack alert sent successfully');
           return;
         } else {
           throw new Error(`HTTP ${response.status}`);
@@ -154,19 +154,19 @@ class AgentWatchdog {
       } catch (error) {
         attempts++;
         console.warn(
-          `✗ Slack alert failed (attempt ${attempts}/${maxAttempts}): ` +
+          `Slack alert failed (attempt ${attempts}/${maxAttempts}): ` +
           `${error.message}`
         );
 
         if (attempts < maxAttempts) {
-          console.log(`↻ Retrying in ${backoffMs}ms...`);
+          console.log(`Retrying in ${backoffMs}ms...`);
           await new Promise(resolve => setTimeout(resolve, backoffMs));
           backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
         }
       }
     }
 
-    console.error('✗ Failed to send Slack alert after all retries');
+    console.error('Failed to send Slack alert after all retries');
   }
 
   /**
@@ -192,12 +192,12 @@ class AgentWatchdog {
    * Start the watchdog monitoring loop
    */
   async start() {
-    console.log('🛡️  Starting Agent Watchdog...');
-    console.log(`📍 Heartbeat path: ${this.heartbeatPath}`);
-    console.log(`⏱️  Check interval: ${this.checkIntervalMs}ms`);
-    console.log(`⏲️  Dead threshold: ${this.deadThresholdMs}ms`);
-    console.log(`🔕 Alert deduplication: ${this.alertDeduplicationMs}ms`);
-    console.log(`💬 Slack: ${this.slackWebhook ? 'configured' : 'not configured'}`);
+    console.log('Starting Agent Watchdog...');
+    console.log(`Heartbeat path: ${this.heartbeatPath}`);
+    console.log(`Check interval: ${this.checkIntervalMs}ms`);
+    console.log(`Dead threshold: ${this.deadThresholdMs}ms`);
+    console.log(`Alert deduplication: ${this.alertDeduplicationMs}ms`);
+    console.log(`Slack: ${this.slackWebhook ? 'configured' : 'not configured'}`);
     console.log('');
 
     // Check immediately

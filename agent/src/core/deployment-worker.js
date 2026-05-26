@@ -45,7 +45,7 @@ async function start() {
     });
 
   } catch (error) {
-    console.error(`❌ Failed to start worker for ${deployment}:`, error);
+    console.error(`Failed to start worker for ${deployment}:`, error);
     process.exit(1);
   }
 }

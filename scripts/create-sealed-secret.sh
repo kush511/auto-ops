@@ -29,7 +29,7 @@ SLACK_BOT_TOKEN="${4:-}"
 # Validate required parameters
 if [[ -z "$INCEPTION_API_KEY" || -z "$SLACK_WEBHOOK_URL" || -z "$SLACK_SIGNING_SECRET" ]]; then
     cat <<EOF
-❌ Missing required parameters!
+  Missing required parameters!
 
 Usage: ./scripts/create-sealed-secret.sh <inception_api_key> <slack_webhook_url> <slack_signing_secret> [slack_bot_token]
 
@@ -44,19 +44,19 @@ Optional:
 How to get them:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-📌 SLACK_WEBHOOK_URL:
+SLACK_WEBHOOK_URL:
    1. Go to https://api.slack.com/apps
    2. Click your app → "Incoming Webhooks"
    3. Click "Add New Webhook to Workspace"
    4. Select channel, click "Allow"
    5. Copy the Webhook URL
 
-📌 SLACK_SIGNING_SECRET:
+SLACK_SIGNING_SECRET:
    1. Go to https://api.slack.com/apps
    2. Click your app → "Basic Information"
    3. Under "App Credentials", copy "Signing Secret"
 
-📌 SLACK_BOT_TOKEN (Optional but Recommended):
+SLACK_BOT_TOKEN (Optional but Recommended):
    1. Go to https://api.slack.com/apps
    2. Click your app → "OAuth & Permissions"
    3. Add scopes: chat:write, users:read, users:read:email
@@ -83,7 +83,7 @@ fi
 TEMP_SECRET_FILE="temp-secret.yaml"
 OUTPUT_FILE="ops/sealed-secret.yaml"
 
-echo "📝 Creating secret with credentials..."
+echo "Creating secret with credentials..."
 
 # Build kubectl command with required fields
 kubectl create secret generic inception-secret \
@@ -96,40 +96,40 @@ kubectl create secret generic inception-secret \
 
 # Check if kubeseal is available (for SealedSecrets)
 if command -v kubeseal &> /dev/null; then
-    echo "🔐 Sealing secret with kubeseal..."
+    echo "Sealing secret with kubeseal..."
     kubeseal --format yaml < "$TEMP_SECRET_FILE" > "$OUTPUT_FILE"
     rm -f "$TEMP_SECRET_FILE"
-    echo "✅ Sealed secret created at $OUTPUT_FILE"
+    echo "Sealed secret created at $OUTPUT_FILE"
     echo ""
-    echo "📋 Apply to cluster:"
+    echo "Apply to cluster:"
     echo "   kubectl apply -f $OUTPUT_FILE"
 else
     # Fallback: Direct secret creation without sealing
-    echo "⚠️  kubeseal not found. Creating unsealed secret (use kubeseal for production)."
+    echo "kubeseal not found. Creating unsealed secret (use kubeseal for production)."
     echo "   Install: https://github.com/bitnami-labs/sealed-secrets/releases"
     mv "$TEMP_SECRET_FILE" "$OUTPUT_FILE"
-    echo "✅ Secret created at $OUTPUT_FILE (NOT SEALED)"
+    echo "Secret created at $OUTPUT_FILE (NOT SEALED)"
     echo ""
-    echo "📋 Apply to cluster:"
+    echo "Apply to cluster:"
     echo "   kubectl apply -f $OUTPUT_FILE"
     echo ""
-    echo "⚠️  WARNING: This secret is not encrypted. Seal it with kubeseal for production use."
+    echo "WARNING: This secret is not encrypted. Seal it with kubeseal for production use."
 fi
 
 # Verify what was created
 echo ""
-echo "📊 Secret Contents:"
-echo "   api-key: ✓"
-echo "   slack-webhook-url: ✓"
-echo "   slack-signing-secret: ✓"
+echo "Secret Contents:"
+echo "   api-key: OK"
+echo "   slack-webhook-url: OK"
+echo "   slack-signing-secret: OK"
 if [[ -n "$SLACK_BOT_TOKEN" ]]; then
-    echo "   slack-bot-token: ✓"
+    echo "   slack-bot-token: OK"
 else
     echo "   slack-bot-token: (omitted)"
 fi
 
 echo ""
-echo "✨ Next steps:"
+echo "Next steps:"
 echo "   1. kubectl apply -f $OUTPUT_FILE"
 echo "   2. kubectl apply -f ops/agent-deployment.yml"
 echo "   3. kubectl apply -f ops/agent-callback-service.yaml"

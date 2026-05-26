@@ -1,0 +1,13 @@
+{
+  "name": "auto-ops-dashboard",
+  "version": "1.0.0",
+  "description": "Auto-Ops live status dashboard",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

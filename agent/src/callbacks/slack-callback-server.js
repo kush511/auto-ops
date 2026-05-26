@@ -43,7 +43,7 @@ class SlackCallbackServer {
   verifySlackSignature(req) {
     const signingSecret = process.env.SLACK_SIGNING_SECRET;
     if (!signingSecret) {
-      console.warn('⚠️ SLACK_SIGNING_SECRET not set, skipping signature verification');
+      console.warn('SLACK_SIGNING_SECRET not set, skipping signature verification');
       return true;  // Skip if not configured
     }
 
@@ -53,7 +53,7 @@ class SlackCallbackServer {
     // Verify timestamp is within 5 minutes (prevent replay attacks)
     const currentTime = Math.floor(Date.now() / 1000);
     if (Math.abs(currentTime - parseInt(timestamp)) > 300) {
-      console.error('❌ Request timestamp too old, potential replay attack');
+      console.error('Request timestamp too old, potential replay attack');
       return false;
     }
 
@@ -66,7 +66,7 @@ class SlackCallbackServer {
 
     // Debug logging
     if (signature !== expectedSignature) {
-      console.error('❌ Invalid Slack signature');
+      console.error('Invalid Slack signature');
       console.error(`   Expected: ${expectedSignature}`);
       console.error(`   Got:      ${signature}`);
       console.error(`   Raw body length: ${req.rawBody ? req.rawBody.length : 'undefined'}`);
@@ -74,7 +74,7 @@ class SlackCallbackServer {
       return false;
     }
 
-    console.log(`✅ Slack signature verified`);
+    console.log(`Slack signature verified`);
     return true;
   }
 
@@ -82,7 +82,7 @@ class SlackCallbackServer {
    * Handle Slack interactive actions (button clicks)
    */
   async handleSlackAction(req, res) {
-    console.log(`📨 Received Slack callback`);
+    console.log(`Received Slack callback`);
     console.log(`   Headers: x-slack-request-timestamp=${req.headers['x-slack-request-timestamp']}`);
     console.log(`   Raw body exists: ${!!req.rawBody}`);
     console.log(`   Raw body length: ${req.rawBody ? req.rawBody.length : 'undefined'}`);
@@ -98,7 +98,7 @@ class SlackCallbackServer {
     try {
       payload = JSON.parse(req.body.payload || '{}');
     } catch (parseError) {
-      console.error(`❌ Failed to parse Slack payload: ${parseError.message}`);
+      console.error(`Failed to parse Slack payload: ${parseError.message}`);
       return res.status(400).json({ error: 'Invalid payload JSON' });
     }
     const { actions, user, trigger_id } = payload;
@@ -124,7 +124,7 @@ class SlackCallbackServer {
     const approvalId = action.value;
     const userId = user?.id || 'unknown';
 
-    console.log(`📨 Slack action received: ${actionId} for approval ${approvalId} by ${userId}`);
+    console.log(`Slack action received: ${actionId} for approval ${approvalId} by ${userId}`);
 
     try {
       if (actionId === 'approve_action') {
@@ -132,10 +132,10 @@ class SlackCallbackServer {
       } else if (actionId === 'reject_action') {
         await this.handleRejectAction(approvalId, userId, fullPayload);
       } else {
-        console.warn(`⚠️ Unknown action: ${actionId}`);
+        console.warn(`Unknown action: ${actionId}`);
       }
     } catch (error) {
-      console.error(`❌ Error processing action: ${error.message}`);
+      console.error(`Error processing action: ${error.message}`);
       await this.notifyError(error.message);
     }
   }
@@ -144,24 +144,24 @@ class SlackCallbackServer {
    * Handle approve action - Execute the action immediately
    */
   async handleApproveAction(approvalId, userId, fullPayload) {
-    console.log(`✅ Processing approval: ${approvalId}`);
+    console.log(`Processing approval: ${approvalId}`);
 
     // Get the approval request
     const approval = this.approvalManager.getApprovalRequest(approvalId);
     if (!approval) {
-      console.error(`❌ Approval not found: ${approvalId}`);
+      console.error(`Approval not found: ${approvalId}`);
       await this.notifyError(`Approval not found: ${approvalId}`);
       return;
     }
 
     if (approval.status === 'expired') {
-      console.warn(`⚠️ Approval expired: ${approvalId}`);
+      console.warn(`Approval expired: ${approvalId}`);
       await this.notifyError(`Approval expired, action was not executed`);
       return;
     }
 
     if (approval.status !== 'pending') {
-      console.warn(`⚠️ Approval already ${approval.status}: ${approvalId}`);
+      console.warn(`Approval already ${approval.status}: ${approvalId}`);
       await this.notifyError(`Approval already ${approval.status}`);
       return;
     }
@@ -170,7 +170,7 @@ class SlackCallbackServer {
     await this.approvalManager.approveAction(approvalId, userId);
 
     // Execute the action immediately
-    console.log(`🚀 Executing approved action: ${approval.action} on ${approval.deployment}`);
+    console.log(`Executing approved action: ${approval.action} on ${approval.deployment}`);
     try {
       // Add skipApprovalCheck=true to bypass approval check (already approved!)
       const actionParams = {
@@ -184,7 +184,7 @@ class SlackCallbackServer {
       );
 
       if (result.success) {
-        console.log(`✅ Action executed successfully: ${approval.action}`);
+        console.log(`Action executed successfully: ${approval.action}`);
         await this.approvalManager.markExecuted(approvalId, result);
 
         // Send confirmation to Slack
@@ -199,12 +199,12 @@ class SlackCallbackServer {
             reasoning: `Action approved and executed by <@${userId}> | approval_id=${approvalId}`
           });
         }
-      } else {
-        console.error(`❌ Action execution failed: ${result.error}`);
+        } else {
+        console.error(`Action execution failed: ${result.error}`);
         await this.notifyError(`Action execution failed: ${result.error}`);
       }
     } catch (error) {
-      console.error(`❌ Exception during action execution: ${error.message}`);
+      console.error(`Exception during action execution: ${error.message}`);
       await this.notifyError(`Exception during action execution: ${error.message}`);
     }
   }
@@ -213,18 +213,18 @@ class SlackCallbackServer {
    * Handle reject action
    */
   async handleRejectAction(approvalId, userId, fullPayload) {
-    console.log(`❌ Processing rejection: ${approvalId}`);
+    console.log(`Processing rejection: ${approvalId}`);
 
     // Get the approval request
     const approval = this.approvalManager.getApprovalRequest(approvalId);
     if (!approval) {
-      console.error(`❌ Approval not found: ${approvalId}`);
+      console.error(`Approval not found: ${approvalId}`);
       await this.notifyError(`Approval not found: ${approvalId}`);
       return;
     }
 
     if (approval.status !== 'pending') {
-      console.warn(`⚠️ Approval already ${approval.status}: ${approvalId}`);
+      console.warn(`Approval already ${approval.status}: ${approvalId}`);
       await this.notifyError(`Approval already ${approval.status}`);
       return;
     }
@@ -246,7 +246,7 @@ class SlackCallbackServer {
       });
     }
 
-    console.log(`✅ Approval rejected: ${approvalId}`);
+    console.log(`Approval rejected: ${approvalId}`);
   }
 
   /**
@@ -265,7 +265,7 @@ class SlackCallbackServer {
           reasoning: message
         });
       } catch (error) {
-        console.error(`❌ Failed to send error notification: ${error.message}`);
+        console.error(`Failed to send error notification: ${error.message}`);
       }
     }
   }
@@ -275,8 +275,8 @@ class SlackCallbackServer {
    */
   start() {
     this.server = this.app.listen(this.port, () => {
-      console.log(`🚀 Slack callback server listening on port ${this.port}`);
-      console.log(`📍 Slack will send actions to: POST /slack/actions`);
+      console.log(`Slack callback server listening on port ${this.port}`);
+      console.log(`Slack will send actions to: POST /slack/actions`);
     });
 
     // Graceful shutdown

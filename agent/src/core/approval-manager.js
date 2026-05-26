@@ -24,12 +24,12 @@ class ApprovalManager {
     try {
       const dir = path.dirname(this.logPath);
       await fs.mkdir(dir, { recursive: true });
-      console.log(`✅ Approval log initialized at ${this.logPath}`);
+      console.log(`Approval log initialized at ${this.logPath}`);
 
       // Load existing approvals from JSONL file
       await this.loadApprovalsFromDisk();
     } catch (error) {
-      console.error(`❌ Failed to initialize approval log: ${error.message}`);
+      console.error(`Failed to initialize approval log: ${error.message}`);
       throw error;
     }
   }
@@ -42,7 +42,7 @@ class ApprovalManager {
     try {
       const data = await fs.readFile(this.logPath, 'utf8');
       if (!data.trim()) {
-        console.log(`📋 No existing approvals to load`);
+        console.log(`No existing approvals to load`);
         return;
       }
 
@@ -68,10 +68,10 @@ class ApprovalManager {
         }
       }
 
-      console.log(`✅ Loaded ${loaded} approvals from disk (${updated} updates)`);
+      console.log(`Loaded ${loaded} approvals from disk (${updated} updates)`);
     } catch (error) {
-      if (error.code !== 'ENOENT') {
-        console.error(`⚠️  Failed to load approvals from disk: ${error.message}`);
+        if (error.code !== 'ENOENT') {
+        console.error(`Failed to load approvals from disk: ${error.message}`);
       }
       // ENOENT is OK - file just doesn't exist yet
     }
@@ -119,9 +119,9 @@ class ApprovalManager {
         this.logPath,
         JSON.stringify(request) + '\n'
       );
-      console.log(`✅ Approval request created: ${approvalId}`);
+      console.log(`Approval request created: ${approvalId}`);
     } catch (error) {
-      console.error(`❌ Failed to write approval to log: ${error.message}`);
+      console.error(`Failed to write approval to log: ${error.message}`);
       throw error;
     }
 
@@ -141,12 +141,12 @@ class ApprovalManager {
   async approveAction(approvalId, userId) {
     const approval = this.approvals.get(approvalId);
     if (!approval) {
-      console.error(`❌ Approval not found: ${approvalId}`);
+      console.error(`Approval not found: ${approvalId}`);
       return null;
     }
 
     if (approval.status !== 'pending') {
-      console.warn(`⚠️ Approval already ${approval.status}: ${approvalId}`);
+      console.warn(`Approval already ${approval.status}: ${approvalId}`);
       return approval;
     }
 
@@ -164,9 +164,9 @@ class ApprovalManager {
           updated: 'approved'
         }) + '\n'
       );
-      console.log(`✅ Approval approved: ${approvalId} by ${userId}`);
+      console.log(`Approval approved: ${approvalId} by ${userId}`);
     } catch (error) {
-      console.error(`❌ Failed to update approval: ${error.message}`);
+      console.error(`Failed to update approval: ${error.message}`);
     }
 
     return approval;
@@ -178,12 +178,12 @@ class ApprovalManager {
   async rejectAction(approvalId, userId, reason = '') {
     const approval = this.approvals.get(approvalId);
     if (!approval) {
-      console.error(`❌ Approval not found: ${approvalId}`);
+      console.error(`Approval not found: ${approvalId}`);
       return null;
     }
 
     if (approval.status !== 'pending') {
-      console.warn(`⚠️ Approval already ${approval.status}: ${approvalId}`);
+      console.warn(`Approval already ${approval.status}: ${approvalId}`);
       return approval;
     }
 
@@ -202,9 +202,9 @@ class ApprovalManager {
           updated: 'rejected'
         }) + '\n'
       );
-      console.log(`✅ Approval rejected: ${approvalId} by ${userId}`);
+      console.log(`Approval rejected: ${approvalId} by ${userId}`);
     } catch (error) {
-      console.error(`❌ Failed to update approval: ${error.message}`);
+      console.error(`Failed to update approval: ${error.message}`);
     }
 
     return approval;
@@ -216,7 +216,7 @@ class ApprovalManager {
   async markExecuted(approvalId, executionResult) {
     const approval = this.approvals.get(approvalId);
     if (!approval) {
-      console.error(`❌ Approval not found: ${approvalId}`);
+      console.error(`Approval not found: ${approvalId}`);
       return null;
     }
 
@@ -233,7 +233,7 @@ class ApprovalManager {
         }) + '\n'
       );
     } catch (error) {
-      console.error(`❌ Failed to update approval result: ${error.message}`);
+      console.error(`Failed to update approval result: ${error.message}`);
     }
 
     return approval;
@@ -266,13 +266,13 @@ class ApprovalManager {
             }) + '\n'
           );
         } catch (error) {
-          console.error(`❌ Failed to log expiry: ${error.message}`);
+          console.error(`Failed to log expiry: ${error.message}`);
         }
       }
     }
 
     if (expired.length > 0) {
-      console.log(`⏰ Expired ${expired.length} approval request(s): ${expired.join(', ')}`);
+      console.log(`Expired ${expired.length} approval request(s): ${expired.join(', ')}`);
     }
 
     return expired;

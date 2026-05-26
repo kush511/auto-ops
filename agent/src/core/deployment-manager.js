@@ -22,13 +22,13 @@ class DeploymentManager {
    * Start all deployment workers
    */
   startAll() {
-    console.log(`🚀 Starting ${this.deployments.length} deployment worker(s)...`);
+    console.log(`Starting ${this.deployments.length} deployment worker(s)...`);
 
     for (const deployment of this.deployments) {
       this.startWorker(deployment);
     }
 
-    console.log(`✓ All workers started`);
+    console.log(`All workers started`);
   }
 
   /**
@@ -42,7 +42,7 @@ class DeploymentManager {
       return;
     }
 
-    console.log(`📍 Spawning worker for deployment: ${deployment}`);
+    console.log(`Spawning worker for deployment: ${deployment}`);
 
     const workerPath = path.join(__dirname, 'deployment-worker.js');
 
@@ -63,7 +63,7 @@ class DeploymentManager {
     // Bind child process exit handler
     child.on('exit', (code, signal) => {
       console.warn(
-        `⚠️ Worker for ${deployment} exited ` +
+        `Worker for ${deployment} exited ` +
         `(code: ${code}, signal: ${signal})`
       );
 
@@ -73,14 +73,14 @@ class DeploymentManager {
       // Auto-restart after 5 seconds if not explicitly stopped
       setTimeout(() => {
         if (!this.children.has(deployment)) {
-          console.log(`↻ Restarting worker for ${deployment}...`);
+          console.log(`Restarting worker for ${deployment}...`);
           this.startWorker(deployment);
         }
       }, 5000);
     });
 
     child.on('error', (error) => {
-      console.error(`❌ Error starting worker for ${deployment}: ${error.message}`);
+      console.error(`Error starting worker for ${deployment}: ${error.message}`);
     });
 
     // Store reference to child process
@@ -91,7 +91,7 @@ class DeploymentManager {
    * Stop all deployment workers gracefully
    */
   stopAll() {
-    console.log(`⏹️  Stopping all ${this.children.size} worker(s)...`);
+    console.log(`Stopping all ${this.children.size} worker(s)...`);
 
     for (const [deployment, child] of this.children.entries()) {
       if (child && child.kill) {
@@ -101,14 +101,14 @@ class DeploymentManager {
     }
 
     this.children.clear();
-    console.log('✓ All workers stopped');
+    console.log('All workers stopped');
   }
 
   /**
    * Stop and restart all workers (for debugging/reconfiguration)
    */
   async restartAll() {
-    console.log('🔄 Restarting all workers...');
+    console.log('Restarting all workers...');
     this.stopAll();
 
     // Wait a bit for children to exit
