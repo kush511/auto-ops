@@ -52,10 +52,23 @@ jobs:
 
       - name: Smoke test
         run: |
+          set -euo pipefail
+          # Wait for app-service to exist
+          for i in {1..30}; do
+            if kubectl get svc app-service >/dev/null 2>&1; then
+              echo "app-service found"; break
+            fi
+            echo "Waiting for app-service... ($i)"; sleep 2
+            if [ "$i" -eq 30 ]; then echo "app-service not found after 60s"; exit 1; fi
+          done
+          # Wait for app deployment to be available
+          kubectl rollout status deployment/app-deployment --timeout=120s
+          # Port-forward and test
           kubectl port-forward svc/app-service 3000:3000 &
+          PF_PID=$!
           sleep 5
           curl -f http://localhost:3000/chaos/errors?duration=30
-          kubectl rollout status deployment/app-deployment
+          kill $PF_PID
 
       - name: Tear down
         if: always()
