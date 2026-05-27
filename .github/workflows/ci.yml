@@ -29,26 +29,37 @@ jobs:
           # Wait for the controller to be ready
           kubectl rollout status deployment/sealed-secrets-controller -n kube-system --timeout=120s
 
-      - name: Deploy stack
-        run: |
-          for f in ops/*.yaml; do
-            case "$f" in
-              *grafana-values.yaml|*prometheus-values.yaml) ;; # skip values files
-              *) kubectl apply -f "$f";;
-            esac
-          done
-            if kubectl get pods -l app=agent | grep -q agent; then
-              kubectl wait --for=condition=ready pod -l app=agent --timeout=120s
-            else
-              echo "No agent pods found to wait for. Skipping wait."
-            fi
 
-      - name: Create sealed secret
+      - name: Debug cluster state
+        run: |
+          echo "=== All resources in default namespace ==="
+          kubectl get all -n default
+          echo "=== All services ==="
+          kubectl get svc -A
+          echo "=== All pods ==="
+          kubectl get pods -A
+          echo "=== Applied manifests ==="
+          ls -la ops/
+          echo "=== Any errors in pod events ==="
+          kubectl get events --sort-by='.lastTimestamp' | tail -20
+      - name: Create secret
         env:
           INCEPTION_API_KEY: ${{ secrets.INCEPTION_API_KEY }}
         run: |
           kubectl create secret generic inception-secret \
             --from-literal=api-key=$INCEPTION_API_KEY
+
+      - name: Deploy stack
+        run: |
+          for f in ops/*.yaml; do
+            case "$f" in
+              *grafana-values.yaml|*prometheus-values.yaml) ;; # skip values files
+              *sealed-secret*) ;; # skip sealed-secret.yaml, secret made above
+              *) kubectl apply -f "$f";;
+            esac
+          done
+          kubectl rollout status deployment/app-deployment --timeout=120s
+          kubectl rollout status deployment/agent-deployment --timeout=120s
 
       - name: Smoke test
         run: |
