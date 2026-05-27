@@ -25,7 +25,7 @@ spec:
           emptyDir: {}
       containers:
         - name: agent
-          image: agent:latest
+          image: auto-ops-agent:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3001
@@ -118,7 +118,7 @@ spec:
             - name: APPROVAL_TIMEOUT_MS
               value: "300000"
         - name: watchdog
-          image: agent-watchdog:latest
+          image: auto-ops-agent:latest
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - name: heartbeat-volume
