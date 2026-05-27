@@ -37,8 +37,11 @@ jobs:
               *) kubectl apply -f "$f";;
             esac
           done
-          kubectl wait --for=condition=ready pod \
-            -l app=agent --timeout=120s
+            if kubectl get pods -l app=agent | grep -q agent; then
+              kubectl wait --for=condition=ready pod -l app=agent --timeout=120s
+            else
+              echo "No agent pods found to wait for. Skipping wait."
+            fi
 
       - name: Create sealed secret
         env:
