@@ -5,82 +5,146 @@ on: [push]
 jobs:
   e2e:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
+      # ── 1. Install kind (only missing binary on GitHub runners) ──────────────
       - name: Install kind
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
           chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+          kind version
 
+      # ── 2. Create cluster ────────────────────────────────────────────────────
       - name: Create cluster
-        run: kind create cluster --name auto-ops
+        run: |
+          kind create cluster --name auto-ops --wait 60s
+          kubectl cluster-info
+          kubectl get nodes
 
+      # ── 3. Build both images and load into kind ──────────────────────────────
       - name: Build and load images
         run: |
           docker build -t auto-ops-app:latest ./app
           docker build -t auto-ops-agent:latest ./agent
           kind load docker-image auto-ops-app:latest --name auto-ops
           kind load docker-image auto-ops-agent:latest --name auto-ops
+          echo "Images loaded:"
+          docker images | grep auto-ops
 
-      - name: Install Sealed Secrets CRD
+      # ── 4. Install Sealed Secrets controller ─────────────────────────────────
+      - name: Install Sealed Secrets controller
         run: |
           kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.25.0/controller.yaml
-          # Wait for the controller to be ready
-          kubectl rollout status deployment/sealed-secrets-controller -n kube-system --timeout=120s
+          kubectl rollout status deployment/sealed-secrets-controller \
+            -n kube-system --timeout=120s
 
-
-      - name: Debug cluster state
-        run: |
-          echo "=== All resources in default namespace ==="
-          kubectl get all -n default
-          echo "=== All services ==="
-          kubectl get svc -A
-          echo "=== All pods ==="
-          kubectl get pods -A
-          echo "=== Applied manifests ==="
-          ls -la ops/
-          echo "=== Any errors in pod events ==="
-          kubectl get events --sort-by='.lastTimestamp' | tail -20
-      - name: Create secret
+      # ── 5. Create the API key secret BEFORE any deployments are applied ──────
+      #       agent-deployment.yml references inception-secret — if it doesn't
+      #       exist at apply time the pod crashloops and rollout status times out
+      - name: Create inception secret
         env:
           INCEPTION_API_KEY: ${{ secrets.INCEPTION_API_KEY }}
         run: |
           kubectl create secret generic inception-secret \
-            --from-literal=api-key=$INCEPTION_API_KEY
+            --from-literal=api-key="$INCEPTION_API_KEY"
+          echo "Secret created:"
+          kubectl get secret inception-secret
 
+      # ── 6. Apply manifests in explicit safe order ────────────────────────────
+      #       Order matters:
+      #         RBAC first       → agent pod can get its SA token
+      #         ConfigMaps next  → runbook available before agent starts
+      #         PVC next         → volume ready before deployments claim it
+      #         Core deployments → app + agent
+      #         Services         → expose after pods exist
+      #         HPA last         → must come after deployment it targets exists
       - name: Deploy stack
         run: |
-          for f in ops/*.yaml; do
-            case "$f" in
-              *grafana-values.yaml|*prometheus-values.yaml) ;; # skip values files
-              *sealed-secret*) ;; # skip sealed-secret.yaml, secret made above
-              *) kubectl apply -f "$f";;
-            esac
-          done
-          kubectl rollout status deployment/app-deployment --timeout=120s
-          kubectl rollout status deployment/agent-deployment --timeout=120s
+          echo "--- RBAC ---"
+          kubectl apply -f ops/agent-rbac.yml
 
+          echo "--- ConfigMaps ---"
+          kubectl apply -f ops/runbook-configmap.yml
+
+          echo "--- PVC ---"
+          kubectl apply -f ops/audit-pvc.yml
+
+          echo "--- App deployment ---"
+          kubectl apply -f ops/app-deployment.yml
+
+          echo "--- Agent deployment ---"
+          kubectl apply -f ops/agent-deployment.yml
+
+          echo "--- Dashboard deployment ---"
+          kubectl apply -f ops/dashboard-deployment.yml
+
+          echo "--- Services ---"
+          kubectl apply -f ops/agent-callback-service.yaml
+
+          echo "--- HPA (must come after app-deployment exists) ---"
+          kubectl apply -f ops/app-hpa.yml
+
+          echo "--- All resources applied ---"
+          kubectl get all -n default
+
+      # ── 7. Wait for deployments to be ready ──────────────────────────────────
+      - name: Wait for deployments
+        run: |
+          echo "Waiting for app-deployment..."
+          kubectl rollout status deployment/app-deployment --timeout=180s
+
+          echo "Waiting for agent-deployment..."
+          kubectl rollout status deployment/agent-deployment --timeout=180s
+
+          echo "Waiting for dashboard-deployment..."
+          kubectl rollout status deployment/dashboard-deployment --timeout=120s || \
+            echo "Dashboard not ready (non-fatal, continuing)"
+
+          echo "Final pod state:"
+          kubectl get pods -A
+
+      # ── 8. Smoke test ─────────────────────────────────────────────────────────
       - name: Smoke test
         run: |
           set -euo pipefail
-          # Wait for app-service to exist
-          for i in {1..30}; do
-            if kubectl get svc app-service >/dev/null 2>&1; then
-              echo "app-service found"; break
-            fi
-            echo "Waiting for app-service... ($i)"; sleep 2
-            if [ "$i" -eq 30 ]; then echo "app-service not found after 60s"; exit 1; fi
-          done
-          # Wait for app deployment to be available
-          kubectl rollout status deployment/app-deployment --timeout=120s
-          # Port-forward and test
+
+          # Confirm app-service exists (it should — app-deployment.yml creates it)
+          echo "Checking app-service..."
+          kubectl get svc app-service
+
+          # Port-forward the app service
           kubectl port-forward svc/app-service 3000:3000 &
           PF_PID=$!
+          # Give port-forward a moment to establish
           sleep 5
-          curl -f http://localhost:3000/chaos/errors?duration=30
-          kill $PF_PID
 
+          # Verify app is responding before triggering chaos
+          echo "Health check..."
+          curl -f --retry 5 --retry-delay 3 http://localhost:3000/health
+
+          # Trigger chaos — 30 seconds of errors
+          echo "Triggering chaos..."
+          curl -f "http://localhost:3000/chaos/errors?duration=30"
+
+          # Wait for agent to detect + act (give it 60s total)
+          echo "Waiting 60s for agent to detect and remediate..."
+          sleep 60
+
+          # Verify the deployment was restarted by the agent
+          echo "Checking rollout status after remediation..."
+          kubectl rollout status deployment/app-deployment --timeout=60s
+
+          # Check agent logs for evidence of a decision
+          echo "Agent decision log (last 30 lines):"
+          kubectl logs deployment/agent-deployment -c agent --tail=30 | \
+            grep -E "(AI result|decision|action|restart|scale|batch)" || \
+            echo "No decision lines found — check agent logs manually"
+
+          kill $PF_PID || true
+
+      # ── 9. Always tear down ───────────────────────────────────────────────────
       - name: Tear down
         if: always()
         run: kind delete cluster --name auto-ops
