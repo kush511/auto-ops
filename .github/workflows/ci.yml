@@ -9,21 +9,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── 1. Install kind (only missing binary on GitHub runners) ──────────────
+      # Install kind
       - name: Install kind
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
           chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
           kind version
 
-      # ── 2. Create cluster ────────────────────────────────────────────────────
+      # Create cluster
       - name: Create cluster
         run: |
           kind create cluster --name auto-ops --wait 60s
           kubectl cluster-info
           kubectl get nodes
 
-      # ── 3. Build both images and load into kind ──────────────────────────────
+      # Build and load images
       - name: Build and load images
         run: |
           docker build -t auto-ops-app:latest ./app
@@ -33,16 +33,14 @@ jobs:
           echo "Images loaded:"
           docker images | grep auto-ops
 
-      # ── 4. Install Sealed Secrets controller ─────────────────────────────────
+      # Install Sealed Secrets controller
       - name: Install Sealed Secrets controller
         run: |
           kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.25.0/controller.yaml
           kubectl rollout status deployment/sealed-secrets-controller \
             -n kube-system --timeout=120s
 
-      # ── 5. Create the API key secret BEFORE any deployments are applied ──────
-      #       agent-deployment.yml references inception-secret — if it doesn't
-      #       exist at apply time the pod crashloops and rollout status times out
+      # Create the API key secret before deployments
       - name: Create inception secret
         env:
           INCEPTION_API_KEY: ${{ secrets.INCEPTION_API_KEY }}
@@ -52,14 +50,7 @@ jobs:
           echo "Secret created:"
           kubectl get secret inception-secret
 
-      # ── 6. Apply manifests in explicit safe order ────────────────────────────
-      #       Order matters:
-      #         RBAC first       → agent pod can get its SA token
-      #         ConfigMaps next  → runbook available before agent starts
-      #         PVC next         → volume ready before deployments claim it
-      #         Core deployments → app + agent
-      #         Services         → expose after pods exist
-      #         HPA last         → must come after deployment it targets exists
+      # Apply manifests in safe order
       - name: Deploy stack
         run: |
           echo "--- RBAC ---"
@@ -89,7 +80,7 @@ jobs:
           echo "--- All resources applied ---"
           kubectl get all -n default
 
-      # ── 7. Wait for deployments to be ready ──────────────────────────────────
+      # Wait for deployments to be ready
       - name: Wait for deployments
         run: |
           echo "Waiting for app-deployment..."
@@ -105,7 +96,7 @@ jobs:
           echo "Final pod state:"
           kubectl get pods -A
 
-      # ── 8. Smoke test ─────────────────────────────────────────────────────────
+      # Smoke test
       - name: Smoke test
         run: |
           set -euo pipefail
@@ -120,21 +111,17 @@ jobs:
           echo "Health check..."
           curl -f --retry 5 --retry-delay 3 http://localhost:3000/health
 
-          # Trigger chaos — 60 seconds of errors (longer window for agent to catch it)
+          # Trigger chaos for 60 seconds
           echo "Triggering chaos..."
           curl -f "http://localhost:3000/chaos/errors?duration=60"
 
-          # Wait longer — agent needs to:
-          # 1. Accumulate 5 log lines (batch size)
-          # 2. Call LLM and get response
-          # 3. Execute the restart
-          # 4. Pod comes back up
+          # Wait for agent to detect, decide, and remediate
           echo "Waiting 120s for agent to detect, decide, and remediate..."
           sleep 120
 
           kill $PF_PID || true
 
-          # Verify agent actually took a restart action — not just log_only
+          # Verify agent actually took a restart action
           echo "Checking agent made a restart decision..."
           RESTART_FOUND=$(kubectl logs deployment/agent-deployment -c agent --tail=100 | \
             grep -c "restart\|Restarting\|rollout restart" || true)
@@ -144,8 +131,7 @@ jobs:
           else
             echo " No restart found in agent logs — showing full decision log:"
             kubectl logs deployment/agent-deployment -c agent --tail=100
-            # Don't fail CI here — LLM decisions are non-deterministic
-            # The chaos endpoint worked and cluster is healthy, that's enough
+            # Don't fail CI here if no restart found
           fi
 
           echo "Final rollout status..."
@@ -154,7 +140,7 @@ jobs:
           echo "Agent last 50 lines:"
           kubectl logs deployment/agent-deployment -c agent --tail=50
 
-      # ── 9. Always tear down ───────────────────────────────────────────────────
+      # Always tear down
       - name: Tear down
         if: always()
         run: kind delete cluster --name auto-ops

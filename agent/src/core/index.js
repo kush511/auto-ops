@@ -191,7 +191,7 @@ class AutoOpsAgent {
 
     // Stage 1 & 2: Two-stage LLM reasoning with optional Prometheus metrics
     const llmResult = await this.llm.analyze(logs, this.deploymentName, this.namespace);
-    console.log(`\n 📊 LLM Analysis Result:`);
+    console.log(`\nLLM Analysis Result:`);
     console.log(`   Diagnosis: ${llmResult.diagnosis?.issue_type || 'Unknown'}`);
     console.log(`   Plan Action: ${llmResult.action}`);
     console.log(`   Confidence: ${(llmResult.confidence * 100).toFixed(1)}%`);

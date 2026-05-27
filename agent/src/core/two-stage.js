@@ -134,7 +134,7 @@ Do not include any other text, only the JSON.`;
       };
     }
 
-    console.log(`📋 Stage 1 Diagnosis:`);
+    console.log(`Stage 1 Diagnosis:`);
     console.log(`   Issue: ${diagnosis.issue_type}`);
     console.log(`   Severity: ${diagnosis.severity}`);
     console.log(`   Confidence: ${diagnosis.confidence}`);
@@ -222,7 +222,7 @@ Do not include any other text, only the JSON.`;
       };
     }
 
-    console.log(`🎯 Stage 2 Plan:`);
+    console.log(`Stage 2 Plan:`);
     console.log(`   Action: ${plan.recommended_action}`);
     console.log(`   Reasoning: ${plan.reasoning}`);
     console.log(`   Confidence: ${plan.confidence}`);
@@ -321,7 +321,7 @@ Do not include any other text, only the JSON.`;
    * Full analysis pipeline
    */
   async analyze(logs, deployment = null, namespace = 'default') {
-    console.log('🧠 Starting two-stage analysis...');
+    console.log('Starting two-stage analysis...');
 
     // Stage 1: Diagnose (with optional Prometheus metrics if deployment provided)
     const diagnosis = await this.diagnose(logs, deployment, namespace);

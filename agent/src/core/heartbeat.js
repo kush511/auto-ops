@@ -38,7 +38,7 @@ class HeartbeatWriter {
     try {
       const timestamp = Date.now().toString();
       await fs.writeFile(this.heartbeatPath, timestamp, 'utf8');
-      console.log(`♥ Heartbeat written: ${new Date().toISOString()}`);
+      console.log(`Heartbeat written: ${new Date().toISOString()}`);
     } catch (error) {
       console.error(`✗ Failed to write heartbeat: ${error.message}`);
       // Don't throw - allow agent to continue even if heartbeat fails
