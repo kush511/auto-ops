@@ -23,9 +23,20 @@ jobs:
           kind load docker-image auto-ops-app:latest --name auto-ops
           kind load docker-image auto-ops-agent:latest --name auto-ops
 
+      - name: Install Sealed Secrets CRD
+        run: |
+          kubectl apply -f https://github.com/bitnami-labs/sealed-secrets/releases/download/v0.25.0/controller.yaml
+          # Wait for the controller to be ready
+          kubectl rollout status deployment/sealed-secrets-controller -n kube-system --timeout=120s
+
       - name: Deploy stack
         run: |
-          kubectl apply -f ops/
+          for f in ops/*.yaml; do
+            case "$f" in
+              *grafana-values.yaml|*prometheus-values.yaml) ;; # skip values files
+              *) kubectl apply -f "$f";;
+            esac
+          done
           kubectl wait --for=condition=ready pod \
             -l app=agent --timeout=120s
 
