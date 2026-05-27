@@ -1,0 +1,48 @@
+name: CI
+
+on: [push]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kind
+        run: |
+          curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.23.0/kind-linux-amd64
+          chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
+
+      - name: Create cluster
+        run: kind create cluster --name auto-ops
+
+      - name: Build and load images
+        run: |
+          docker build -t auto-ops-app:latest ./app
+          docker build -t auto-ops-agent:latest ./agent
+          kind load docker-image auto-ops-app:latest --name auto-ops
+          kind load docker-image auto-ops-agent:latest --name auto-ops
+
+      - name: Deploy stack
+        run: |
+          kubectl apply -f ops/
+          kubectl wait --for=condition=ready pod \
+            -l app=agent --timeout=120s
+
+      - name: Create sealed secret
+        env:
+          INCEPTION_API_KEY: ${{ secrets.INCEPTION_API_KEY }}
+        run: |
+          kubectl create secret generic inception-secret \
+            --from-literal=api-key=$INCEPTION_API_KEY
+
+      - name: Smoke test
+        run: |
+          kubectl port-forward svc/app-service 3000:3000 &
+          sleep 5
+          curl -f http://localhost:3000/chaos/errors?duration=30
+          kubectl rollout status deployment/app-deployment
+
+      - name: Tear down
+        if: always()
+        run: kind delete cluster --name auto-ops
