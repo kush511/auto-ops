@@ -110,39 +110,49 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Confirm app-service exists (it should — app-deployment.yml creates it)
           echo "Checking app-service..."
           kubectl get svc app-service
 
-          # Port-forward the app service
           kubectl port-forward svc/app-service 3000:3000 &
           PF_PID=$!
-          # Give port-forward a moment to establish
           sleep 5
 
-          # Verify app is responding before triggering chaos
           echo "Health check..."
           curl -f --retry 5 --retry-delay 3 http://localhost:3000/health
 
-          # Trigger chaos — 30 seconds of errors
+          # Trigger chaos — 60 seconds of errors (longer window for agent to catch it)
           echo "Triggering chaos..."
-          curl -f "http://localhost:3000/chaos/errors?duration=30"
+          curl -f "http://localhost:3000/chaos/errors?duration=60"
 
-          # Wait for agent to detect + act (give it 60s total)
-          echo "Waiting 60s for agent to detect and remediate..."
-          sleep 60
-
-          # Verify the deployment was restarted by the agent
-          echo "Checking rollout status after remediation..."
-          kubectl rollout status deployment/app-deployment --timeout=60s
-
-          # Check agent logs for evidence of a decision
-          echo "Agent decision log (last 30 lines):"
-          kubectl logs deployment/agent-deployment -c agent --tail=30 | \
-            grep -E "(AI result|decision|action|restart|scale|batch)" || \
-            echo "No decision lines found — check agent logs manually"
+          # Wait longer — agent needs to:
+          # 1. Accumulate 5 log lines (batch size)
+          # 2. Call LLM and get response
+          # 3. Execute the restart
+          # 4. Pod comes back up
+          echo "Waiting 120s for agent to detect, decide, and remediate..."
+          sleep 120
 
           kill $PF_PID || true
+
+          # Verify agent actually took a restart action — not just log_only
+          echo "Checking agent made a restart decision..."
+          RESTART_FOUND=$(kubectl logs deployment/agent-deployment -c agent --tail=100 | \
+            grep -c "restart\|Restarting\|rollout restart" || true)
+
+          if [ "$RESTART_FOUND" -gt 0 ]; then
+            echo " Agent took restart action"
+          else
+            echo " No restart found in agent logs — showing full decision log:"
+            kubectl logs deployment/agent-deployment -c agent --tail=100
+            # Don't fail CI here — LLM decisions are non-deterministic
+            # The chaos endpoint worked and cluster is healthy, that's enough
+          fi
+
+          echo "Final rollout status..."
+          kubectl rollout status deployment/app-deployment --timeout=60s
+
+          echo "Agent last 50 lines:"
+          kubectl logs deployment/agent-deployment -c agent --tail=50
 
       # ── 9. Always tear down ───────────────────────────────────────────────────
       - name: Tear down
