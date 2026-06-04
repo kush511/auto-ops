@@ -162,18 +162,18 @@ print_header "STEP 7: Building Docker Images"
 print_info "Checking if Docker images need to be built..."
 
 # Build agent image if it doesn't exist or if requested
-if ! docker image ls | grep -q "^agent[[:space:]]"; then
+if ! docker image ls | grep -q "^auto-ops-agent[[:space:]]"; then
     print_info "Building agent Docker image..."
-    docker build -t agent:latest -f "$SCRIPT_DIR/../agent/Dockerfile" "$SCRIPT_DIR/../agent"
+    docker build -t auto-ops-agent:latest -f "$SCRIPT_DIR/../agent/Dockerfile" "$SCRIPT_DIR/../agent"
     print_success "Agent image built"
 else
     print_info "Agent image already exists"
 fi
 
 # Build app image if it doesn't exist
-if ! docker image ls | grep -q "^my-app[[:space:]]"; then
+if ! docker image ls | grep -q "^auto-ops-app[[:space:]]"; then
     print_info "Building app Docker image..."
-    docker build -t my-app:latest -f "$SCRIPT_DIR/../app/Dockerfile" "$SCRIPT_DIR/../app"
+    docker build -t auto-ops-app:latest -f "$SCRIPT_DIR/../app/Dockerfile" "$SCRIPT_DIR/../app"
     print_success "App image built"
 else
     print_info "App image already exists"
@@ -197,11 +197,11 @@ print_header "STEP 8: Loading Images into Kind Cluster"
 if kubectl cluster-info 2>&1 | grep -q "kind"; then
     print_info "Loading images into kind cluster..."
 
-    kind load docker-image agent:latest 2>/dev/null || \
-        print_info "Could not load agent:latest"
+    kind load docker-image auto-ops-agent:latest 2>/dev/null || \
+        print_info "Could not load auto-ops-agent:latest"
 
-    kind load docker-image my-app:latest 2>/dev/null || \
-        print_info "Could not load my-app:latest"
+    kind load docker-image auto-ops-app:latest 2>/dev/null || \
+        print_info "Could not load auto-ops-app:latest"
 
     kind load docker-image agent-watchdog:latest 2>/dev/null || \
         print_info "Could not load agent-watchdog:latest"

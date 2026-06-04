@@ -161,8 +161,8 @@ print_success "Prometheus and Grafana deployed"
 ###############################################################################
 print_header "STEP 5: Building Docker Images"
 
-docker build -t agent:latest -f "${ROOT_DIR}/agent/Dockerfile" "${ROOT_DIR}/agent"
-docker build -t my-app:latest -f "${ROOT_DIR}/app/Dockerfile" "${ROOT_DIR}/app"
+docker build -t auto-ops-agent:latest -f "${ROOT_DIR}/agent/Dockerfile" "${ROOT_DIR}/agent"
+docker build -t auto-ops-app:latest -f "${ROOT_DIR}/app/Dockerfile" "${ROOT_DIR}/app"
 docker build -t agent-watchdog:latest -f "${ROOT_DIR}/agent/sidecar.dockerfile" "${ROOT_DIR}/agent"
 docker build -t auto-ops-dashboard:latest -f "${ROOT_DIR}/dashboard/Dockerfile" "${ROOT_DIR}/dashboard"
 
@@ -173,10 +173,10 @@ print_success "Docker images built"
 ###############################################################################
 print_header "STEP 6: Loading Images into Kind"
 
-kind load docker-image agent:latest --name local
-kind load docker-image my-app:latest --name local
-kind load docker-image agent-watchdog:latest --name local
-kind load docker-image auto-ops-dashboard:latest --name local
+kind load docker-image auto-ops-agent:latest --name auto-ops
+kind load docker-image auto-ops-app:latest --name auto-ops
+kind load docker-image agent-watchdog:latest --name auto-ops
+kind load docker-image auto-ops-dashboard:latest --name auto-ops
 
 print_success "Images loaded into kind"
 

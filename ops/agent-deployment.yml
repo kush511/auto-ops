@@ -118,7 +118,7 @@ spec:
             - name: APPROVAL_TIMEOUT_MS
               value: "300000"
         - name: watchdog
-          image: auto-ops-agent:latest
+          image: agent-watchdog:latest
           imagePullPolicy: IfNotPresent
           volumeMounts:
             - name: heartbeat-volume

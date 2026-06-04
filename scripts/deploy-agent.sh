@@ -41,11 +41,11 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 print_header "STEP 1: Building Docker Images"
 
 print_info "Building agent image..."
-docker build -t agent:latest "$SCRIPT_DIR/agent" -f "$SCRIPT_DIR/agent/Dockerfile" || \
+docker build -t auto-ops-agent:latest "$SCRIPT_DIR/agent" -f "$SCRIPT_DIR/agent/Dockerfile" || \
     print_error "Failed to build agent image"
 
 print_info "Building app image..."
-docker build -t my-app:latest "$SCRIPT_DIR/app" -f "$SCRIPT_DIR/app/Dockerfile" || \
+docker build -t auto-ops-app:latest "$SCRIPT_DIR/app" -f "$SCRIPT_DIR/app/Dockerfile" || \
     print_error "Failed to build app image"
 
 print_info "Building watchdog sidecar image..."
@@ -61,8 +61,8 @@ print_header "STEP 2: Loading Images into Kind Cluster"
 
 if kubectl cluster-info 2>&1 | grep -q "kind"; then
     print_info "Loading images into kind..."
-    kind load docker-image agent:latest
-    kind load docker-image my-app:latest
+    kind load docker-image auto-ops-agent:latest
+    kind load docker-image auto-ops-app:latest
     kind load docker-image agent-watchdog:latest
     print_success "Images loaded"
 else
